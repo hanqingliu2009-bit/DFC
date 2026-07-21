@@ -6,7 +6,40 @@
 
 .hero {
   margin-bottom: 1.75rem;
-  max-width: 36rem;
+  max-width: 40rem;
+}
+
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.unit-switch {
+  display: inline-flex;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.unit-switch button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.45rem 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.unit-switch button.is-active {
+  background: var(--ink);
+  color: #f4f6f8;
+}
+
+.unit-switch button:hover:not(.is-active) {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--focus) 8%, transparent);
 }
 
 .brand {
@@ -52,6 +85,8 @@
   border: 1px solid var(--stroke);
   background: var(--chart-bg);
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .force-chart {
@@ -60,6 +95,15 @@
   display: block;
   touch-action: none;
   cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.is-chart-dragging,
+body.is-chart-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: grabbing !important;
 }
 
 .force-chart .tick {
@@ -85,6 +129,30 @@
   margin: 0.55rem 0 0;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.probe-live {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+
+.force-chart .probe-tip-text {
+  fill: var(--ink);
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.force-chart .probe-tip-text.accent {
+  fill: var(--accent-ink);
+  font-weight: 500;
 }
 
 .side {

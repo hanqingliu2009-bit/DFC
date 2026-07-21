@@ -1,19 +1,46 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import type { AxisRange, ForcePoint } from '../lib/types'
-import { createPoint, roundCoord, sortedPoints } from '../lib/energy'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type SyntheticEvent,
+} from 'react'
+import type { AxisRange, CurveProbe, ForcePoint } from '../lib/types'
+import { createPoint, formatNumber, probeCurveAt, roundCoord, sortedPoints } from '../lib/energy'
+import {
+  cmToDisplay,
+  displayToCm,
+  displayToLb,
+  forceLabel,
+  lbToDisplay,
+  lengthLabel,
+  type UnitSystem,
+} from '../lib/units'
 
 type Props = {
   points: ForcePoint[]
   range: AxisRange
   selectedId: string | null
+  unitSystem: UnitSystem
   onChange: (points: ForcePoint[]) => void
   onSelect: (id: string | null) => void
+  onProbe?: (probe: CurveProbe | null) => void
 }
 
 const PAD = { top: 28, right: 24, bottom: 48, left: 56 }
 const DBL_MS = 350
 
-export function ForceChart({ points, range, selectedId, onChange, onSelect }: Props) {
+export function ForceChart({
+  points,
+  range,
+  selectedId,
+  unitSystem,
+  onChange,
+  onSelect,
+  onProbe,
+}: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [size, setSize] = useState({ w: 800, h: 480 })
   const dragId = useRef<string | null>(null)
@@ -22,7 +49,9 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
   const lastPointClick = useRef<{ id: string; at: number } | null>(null)
   const pointsRef = useRef(points)
   pointsRef.current = points
-  const [hover, setHover] = useState<{ xCm: number; yLb: number } | null>(null)
+  const onProbeRef = useRef(onProbe)
+  onProbeRef.current = onProbe
+  const [probe, setProbe] = useState<CurveProbe | null>(null)
 
   useEffect(() => {
     const el = svgRef.current
@@ -32,8 +61,14 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
       if (!cr) return
       setSize({ w: Math.max(320, cr.width), h: Math.max(280, cr.height) })
     })
+    const preventSelect = (ev: Event) => ev.preventDefault()
+    el.addEventListener('selectstart', preventSelect)
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => {
+      ro.disconnect()
+      el.removeEventListener('selectstart', preventSelect)
+      document.body.classList.remove('is-chart-dragging')
+    }
   }, [])
 
   const plotW = size.w - PAD.left - PAD.right
@@ -66,7 +101,9 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
     [size, plotW, plotH, range, xSpan, ySpan],
   )
 
-  const sorted = sortedPoints(points)
+  const sorted = useMemo(() => sortedPoints(points), [points])
+  const x0 = sorted.length ? sorted[0].xCm : 0
+
   const pathD =
     sorted.length >= 2
       ? sorted
@@ -92,8 +129,53 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
         })()
       : ''
 
-  const xTicks = niceTicks(range.xMin, range.xMax, 8)
-  const yTicks = niceTicks(range.yMin, range.yMax, 6)
+  const xTicks = niceTicks(
+    cmToDisplay(range.xMin, unitSystem),
+    cmToDisplay(range.xMax, unitSystem),
+    8,
+  ).map((display) => ({
+    cm: displayToCm(display, unitSystem),
+    label: display,
+  }))
+  const yTicks = niceTicks(
+    lbToDisplay(range.yMin, unitSystem),
+    lbToDisplay(range.yMax, unitSystem),
+    6,
+  ).map((display) => ({
+    lb: displayToLb(display, unitSystem),
+    label: display,
+  }))
+
+  function publishProbe(next: CurveProbe | null) {
+    setProbe(next)
+    onProbeRef.current?.(next)
+  }
+
+  function updateProbeFromX(xCm: number) {
+    if (sorted.length < 2) {
+      publishProbe(null)
+      return
+    }
+    if (xCm < sorted[0].xCm || xCm > sorted[sorted.length - 1].xCm) {
+      publishProbe(null)
+      return
+    }
+    publishProbe(probeCurveAt(sorted, xCm))
+  }
+
+  function beginInteract(e: ReactPointerEvent) {
+    e.preventDefault()
+    window.getSelection()?.removeAllRanges()
+    document.body.classList.add('is-chart-dragging')
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+  }
+
+  function endInteract() {
+    dragId.current = null
+    dragOrigin.current = null
+    dragging.current = false
+    document.body.classList.remove('is-chart-dragging')
+  }
 
   function onPointerDown(e: ReactPointerEvent) {
     const target = e.target as Element
@@ -106,7 +188,7 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
       const prev = lastPointClick.current
       if (prev && prev.id === pointId && now - prev.at <= DBL_MS) {
         lastPointClick.current = null
-        dragId.current = null
+        endInteract()
         onChange(pointsRef.current.filter((p) => p.id !== pointId))
         onSelect(null)
         e.preventDefault()
@@ -117,7 +199,7 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
       dragOrigin.current = { x: e.clientX, y: e.clientY }
       dragging.current = false
       onSelect(pointId)
-      ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+      beginInteract(e)
       return
     }
 
@@ -138,13 +220,21 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
     dragId.current = p.id
     dragOrigin.current = { x: e.clientX, y: e.clientY }
     dragging.current = false
-    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    beginInteract(e)
   }
 
   function onPointerMove(e: ReactPointerEvent) {
     const data = toData(e.clientX, e.clientY)
-    setHover(data)
+    if (!dragId.current) {
+      updateProbeFromX(data.xCm)
+    }
+
     if (!dragId.current) return
+
+    if (dragging.current || dragOrigin.current) {
+      e.preventDefault()
+      window.getSelection()?.removeAllRanges()
+    }
 
     if (!dragging.current && dragOrigin.current) {
       const dx = e.clientX - dragOrigin.current.x
@@ -162,14 +252,34 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
   }
 
   function onPointerUp() {
-    dragId.current = null
-    dragOrigin.current = null
-    dragging.current = false
+    endInteract()
   }
 
   function onPointerLeave() {
-    setHover(null)
+    if (!dragId.current) publishProbe(null)
   }
+
+  function onDragStart(e: SyntheticEvent) {
+    e.preventDefault()
+  }
+
+  const triangle =
+    probe && sorted.length >= 2
+      ? {
+          base0: toPixel(x0, range.yMin),
+          base1: toPixel(probe.xCm, range.yMin),
+          tip: toPixel(probe.xCm, probe.yLb),
+          onCurve: toPixel(probe.xCm, probe.yLb),
+        }
+      : null
+
+  const tipBox =
+    probe && triangle
+      ? {
+          x: Math.min(triangle.onCurve.px + 12, PAD.left + plotW - 168),
+          y: Math.max(PAD.top + 8, triangle.onCurve.py - 64),
+        }
+      : null
 
   return (
     <svg
@@ -180,9 +290,11 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       onPointerLeave={onPointerLeave}
+      onDragStart={onDragStart}
       role="img"
-      aria-label="拉力曲线图，点击添加数据点，拖拽调整，双击删除"
+      aria-label="拉力曲线图，点击添加数据点，拖拽调整，双击删除；悬停查看蓄能与蓄能系数"
     >
       <defs>
         <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
@@ -205,9 +317,9 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
       />
 
       {yTicks.map((t) => {
-        const { py } = toPixel(range.xMin, t)
+        const { py } = toPixel(range.xMin, t.lb)
         return (
-          <g key={`y-${t}`}>
+          <g key={`y-${t.lb}`}>
             <line
               x1={PAD.left}
               y1={py}
@@ -217,16 +329,16 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
               strokeWidth={1}
             />
             <text x={PAD.left - 10} y={py + 4} textAnchor="end" className="tick">
-              {t}
+              {t.label}
             </text>
           </g>
         )
       })}
 
       {xTicks.map((t) => {
-        const { px } = toPixel(t, range.yMin)
+        const { px } = toPixel(t.cm, range.yMin)
         return (
-          <g key={`x-${t}`}>
+          <g key={`x-${t.cm}`}>
             <line
               x1={px}
               y1={PAD.top}
@@ -236,7 +348,7 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
               strokeWidth={1}
             />
             <text x={px} y={PAD.top + plotH + 22} textAnchor="middle" className="tick">
-              {t}
+              {t.label}
             </text>
           </g>
         )
@@ -266,7 +378,7 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
         transform={`rotate(-90 18 ${PAD.top + plotH / 2})`}
         textAnchor="middle"
       >
-        拉力 (Lb)
+        拉力 ({forceLabel(unitSystem)})
       </text>
       <text
         x={PAD.left + plotW / 2}
@@ -274,7 +386,7 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
         className="axis-label"
         textAnchor="middle"
       >
-        拉距 (cm)
+        拉距 ({lengthLabel(unitSystem)})
       </text>
 
       {areaD && <path d={areaD} fill="url(#areaFill)" pointerEvents="none" />}
@@ -290,12 +402,42 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
         />
       )}
 
+      {triangle && (
+        <g pointerEvents="none" className="probe-overlay">
+          <path
+            d={`M ${triangle.base0.px} ${triangle.base0.py} L ${triangle.base1.px} ${triangle.base1.py} L ${triangle.tip.px} ${triangle.tip.py} Z`}
+            fill="var(--focus)"
+            fillOpacity={0.08}
+            stroke="var(--focus)"
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+          />
+          <line
+            x1={triangle.onCurve.px}
+            y1={PAD.top}
+            x2={triangle.onCurve.px}
+            y2={PAD.top + plotH}
+            stroke="var(--focus)"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+            opacity={0.55}
+          />
+          <circle
+            cx={triangle.onCurve.px}
+            cy={triangle.onCurve.py}
+            r={6}
+            fill="var(--focus)"
+            stroke="var(--chart-bg)"
+            strokeWidth={2}
+          />
+        </g>
+      )}
+
       {sorted.map((p) => {
         const { px, py } = toPixel(p.xCm, p.yLb)
         const selected = p.id === selectedId
         return (
           <g key={p.id} data-point-id={p.id} style={{ cursor: 'grab' }}>
-            {/* 扩大点击热区，方便双击删除 */}
             <circle data-point-id={p.id} cx={px} cy={py} r={14} fill="transparent" />
             <circle
               data-point-id={p.id}
@@ -310,10 +452,31 @@ export function ForceChart({ points, range, selectedId, onChange, onSelect }: Pr
         )
       })}
 
-      {hover && (
-        <text x={PAD.left + 8} y={PAD.top + 18} className="cursor-readout">
-          {hover.xCm.toFixed(1)} cm · {hover.yLb.toFixed(1)} Lb
-        </text>
+      {probe && tipBox && (
+        <g pointerEvents="none" className="probe-tip">
+          <rect
+            x={tipBox.x}
+            y={tipBox.y}
+            width={160}
+            height={58}
+            rx={4}
+            fill="var(--panel)"
+            stroke="var(--stroke)"
+          />
+          <text x={tipBox.x + 10} y={tipBox.y + 18} className="probe-tip-text">
+            {formatNumber(cmToDisplay(probe.xCm, unitSystem), 1)} {lengthLabel(unitSystem)} ·{' '}
+            {formatNumber(lbToDisplay(probe.yLb, unitSystem), 1)} {forceLabel(unitSystem)}
+          </text>
+          <text x={tipBox.x + 10} y={tipBox.y + 36} className="probe-tip-text">
+            当前蓄能 {formatNumber(probe.joules)} J
+          </text>
+          <text x={tipBox.x + 10} y={tipBox.y + 52} className="probe-tip-text accent">
+            蓄能系数{' '}
+            {probe.energyCoefficient == null
+              ? '—'
+              : formatNumber(probe.energyCoefficient, 3)}
+          </text>
+        </g>
       )}
     </svg>
   )
