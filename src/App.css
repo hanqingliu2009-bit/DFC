@@ -79,6 +79,32 @@
   min-width: 0;
 }
 
+.chart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.55rem;
+}
+
+.chart-toolbar button.ghost {
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.chart-toolbar button.ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.force-chart.is-panning {
+  cursor: grabbing;
+}
+
 .chart-frame {
   height: min(62vh, 560px);
   min-height: 360px;

@@ -26,11 +26,15 @@ type Props = {
   unitSystem: UnitSystem
   onChange: (points: ForcePoint[]) => void
   onSelect: (id: string | null) => void
+  onRangeChange: (range: AxisRange) => void
   onProbe?: (probe: CurveProbe | null) => void
 }
 
 const PAD = { top: 28, right: 24, bottom: 48, left: 56 }
 const DBL_MS = 350
+const MIN_X_SPAN_CM = 2
+const MIN_Y_SPAN_LB = 2
+const ZOOM_STEP = 1.15
 
 export function ForceChart({
   points,
@@ -39,6 +43,7 @@ export function ForceChart({
   unitSystem,
   onChange,
   onSelect,
+  onRangeChange,
   onProbe,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -46,12 +51,22 @@ export function ForceChart({
   const dragId = useRef<string | null>(null)
   const dragOrigin = useRef<{ x: number; y: number } | null>(null)
   const dragging = useRef(false)
+  const panRef = useRef<{
+    startX: number
+    startY: number
+    range: AxisRange
+  } | null>(null)
   const lastPointClick = useRef<{ id: string; at: number } | null>(null)
   const pointsRef = useRef(points)
   pointsRef.current = points
+  const rangeRef = useRef(range)
+  rangeRef.current = range
+  const onRangeChangeRef = useRef(onRangeChange)
+  onRangeChangeRef.current = onRangeChange
   const onProbeRef = useRef(onProbe)
   onProbeRef.current = onProbe
   const [probe, setProbe] = useState<CurveProbe | null>(null)
+  const [isPanning, setIsPanning] = useState(false)
 
   useEffect(() => {
     const el = svgRef.current
@@ -85,21 +100,64 @@ export function ForceChart({
   )
 
   const toData = useCallback(
-    (clientX: number, clientY: number) => {
+    (clientX: number, clientY: number, clamp = true) => {
       const svg = svgRef.current
+      const r = rangeRef.current
+      const xSp = Math.max(r.xMax - r.xMin, 1e-6)
+      const ySp = Math.max(r.yMax - r.yMin, 1e-6)
       if (!svg) return { xCm: 0, yLb: 0 }
       const rect = svg.getBoundingClientRect()
       const px = ((clientX - rect.left) / rect.width) * size.w
       const py = ((clientY - rect.top) / rect.height) * size.h
-      const xCm = range.xMin + ((px - PAD.left) / plotW) * xSpan
-      const yLb = range.yMin + (1 - (py - PAD.top) / plotH) * ySpan
+      let xCm = r.xMin + ((px - PAD.left) / plotW) * xSp
+      let yLb = r.yMin + (1 - (py - PAD.top) / plotH) * ySp
+      if (clamp) {
+        xCm = Math.min(r.xMax, Math.max(r.xMin, xCm))
+        yLb = Math.min(r.yMax, Math.max(r.yMin, yLb))
+      }
       return {
-        xCm: roundCoord(Math.min(range.xMax, Math.max(range.xMin, xCm))),
-        yLb: roundCoord(Math.min(range.yMax, Math.max(range.yMin, yLb))),
+        xCm: roundCoord(xCm),
+        yLb: roundCoord(yLb),
       }
     },
-    [size, plotW, plotH, range, xSpan, ySpan],
+    [size, plotW, plotH],
   )
+
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+
+    const onWheel = (ev: WheelEvent) => {
+      ev.preventDefault()
+      const r = rangeRef.current
+      const xSp = Math.max(r.xMax - r.xMin, 1e-6)
+      const ySp = Math.max(r.yMax - r.yMin, 1e-6)
+      const factor = ev.deltaY > 0 ? ZOOM_STEP : 1 / ZOOM_STEP
+      const anchor = toData(ev.clientX, ev.clientY, false)
+
+      let nextXSpan = xSp * factor
+      let nextYSpan = ySp * factor
+      if (nextXSpan < MIN_X_SPAN_CM) nextXSpan = MIN_X_SPAN_CM
+      if (nextYSpan < MIN_Y_SPAN_LB) nextYSpan = MIN_Y_SPAN_LB
+      // 限制放得过大
+      if (nextXSpan > 5000) nextXSpan = 5000
+      if (nextYSpan > 5000) nextYSpan = 5000
+
+      const xRatio = xSp > 0 ? (anchor.xCm - r.xMin) / xSp : 0.5
+      const yRatio = ySp > 0 ? (anchor.yLb - r.yMin) / ySp : 0.5
+      const xMin = anchor.xCm - xRatio * nextXSpan
+      const yMin = anchor.yLb - yRatio * nextYSpan
+      onRangeChangeRef.current({
+        xMin: roundCoord(xMin, 4),
+        xMax: roundCoord(xMin + nextXSpan, 4),
+        yMin: roundCoord(yMin, 4),
+        yMax: roundCoord(yMin + nextYSpan, 4),
+      })
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [toData])
 
   const sorted = useMemo(() => sortedPoints(points), [points])
   const x0 = sorted.length ? sorted[0].xCm : 0
@@ -174,6 +232,8 @@ export function ForceChart({
     dragId.current = null
     dragOrigin.current = null
     dragging.current = false
+    panRef.current = null
+    setIsPanning(false)
     document.body.classList.remove('is-chart-dragging')
   }
 
@@ -182,6 +242,20 @@ export function ForceChart({
     const pointId =
       target.getAttribute('data-point-id') ??
       target.closest('[data-point-id]')?.getAttribute('data-point-id')
+
+    // 中键 / Alt+左键：平移视图
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      panRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        range: { ...rangeRef.current },
+      }
+      setIsPanning(true)
+      beginInteract(e)
+      return
+    }
+
+    if (e.button !== 0) return
 
     if (pointId) {
       const now = performance.now()
@@ -205,12 +279,8 @@ export function ForceChart({
 
     lastPointClick.current = null
     const { xCm, yLb } = toData(e.clientX, e.clientY)
-    if (
-      xCm < range.xMin ||
-      xCm > range.xMax ||
-      yLb < range.yMin ||
-      yLb > range.yMax
-    ) {
+    const r = rangeRef.current
+    if (xCm < r.xMin || xCm > r.xMax || yLb < r.yMin || yLb > r.yMax) {
       onSelect(null)
       return
     }
@@ -224,6 +294,28 @@ export function ForceChart({
   }
 
   function onPointerMove(e: ReactPointerEvent) {
+    if (panRef.current) {
+      e.preventDefault()
+      window.getSelection()?.removeAllRanges()
+      const start = panRef.current
+      const svg = svgRef.current
+      if (!svg) return
+      const rect = svg.getBoundingClientRect()
+      const xSp = Math.max(start.range.xMax - start.range.xMin, 1e-6)
+      const ySp = Math.max(start.range.yMax - start.range.yMin, 1e-6)
+      const dxPx = ((e.clientX - start.startX) / rect.width) * size.w
+      const dyPx = ((e.clientY - start.startY) / rect.height) * size.h
+      const dxCm = -(dxPx / plotW) * xSp
+      const dyLb = (dyPx / plotH) * ySp
+      onRangeChangeRef.current({
+        xMin: roundCoord(start.range.xMin + dxCm, 4),
+        xMax: roundCoord(start.range.xMax + dxCm, 4),
+        yMin: roundCoord(start.range.yMin + dyLb, 4),
+        yMax: roundCoord(start.range.yMax + dyLb, 4),
+      })
+      return
+    }
+
     const data = toData(e.clientX, e.clientY)
     if (!dragId.current) {
       updateProbeFromX(data.xCm)
@@ -284,7 +376,7 @@ export function ForceChart({
   return (
     <svg
       ref={svgRef}
-      className="force-chart"
+      className={`force-chart${isPanning ? ' is-panning' : ''}`}
       viewBox={`0 0 ${size.w} ${size.h}`}
       preserveAspectRatio="none"
       onPointerDown={onPointerDown}
@@ -294,7 +386,7 @@ export function ForceChart({
       onPointerLeave={onPointerLeave}
       onDragStart={onDragStart}
       role="img"
-      aria-label="拉力曲线图，点击添加数据点，拖拽调整，双击删除；悬停查看蓄能与蓄能系数"
+      aria-label="拉力曲线图，滚轮缩放，Alt 拖拽或中键平移，点击添加测点"
     >
       <defs>
         <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">

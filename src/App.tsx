@@ -25,6 +25,49 @@ import './App.css'
 
 const DEFAULT_RANGE: AxisRange = { xMin: 0, xMax: 100, yMin: 0, yMax: 100 }
 
+function fitRangeToPoints(points: ForcePoint[]): AxisRange {
+  if (points.length === 0) return DEFAULT_RANGE
+  const xs = points.map((p) => p.xCm)
+  const ys = points.map((p) => p.yLb)
+  let xMin = Math.min(...xs)
+  let xMax = Math.max(...xs)
+  let yMin = Math.min(...ys)
+  let yMax = Math.max(...ys)
+  if (xMax - xMin < 2) {
+    const mid = (xMin + xMax) / 2
+    xMin = mid - 1
+    xMax = mid + 1
+  }
+  if (yMax - yMin < 2) {
+    const mid = (yMin + yMax) / 2
+    yMin = Math.max(0, mid - 1)
+    yMax = mid + 1
+  }
+  const xPad = (xMax - xMin) * 0.08
+  const yPad = (yMax - yMin) * 0.1
+  return {
+    xMin: roundDisplay(xMin - xPad, 2),
+    xMax: roundDisplay(xMax + xPad, 2),
+    yMin: roundDisplay(Math.max(0, yMin - yPad), 2),
+    yMax: roundDisplay(yMax + yPad, 2),
+  }
+}
+
+function zoomRange(range: AxisRange, factor: number): AxisRange {
+  const xMid = (range.xMin + range.xMax) / 2
+  const yMid = (range.yMin + range.yMax) / 2
+  let xSpan = Math.max((range.xMax - range.xMin) * factor, 2)
+  let ySpan = Math.max((range.yMax - range.yMin) * factor, 2)
+  xSpan = Math.min(xSpan, 5000)
+  ySpan = Math.min(ySpan, 5000)
+  return {
+    xMin: roundDisplay(xMid - xSpan / 2, 4),
+    xMax: roundDisplay(xMid + xSpan / 2, 4),
+    yMin: roundDisplay(yMid - ySpan / 2, 4),
+    yMax: roundDisplay(yMid + ySpan / 2, 4),
+  }
+}
+
 export default function App() {
   const [points, setPoints] = useState<ForcePoint[]>(() => sampleCurve())
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -170,6 +213,20 @@ export default function App() {
 
       <main className="layout">
         <section className="chart-panel" aria-label="拉力曲线图">
+          <div className="chart-toolbar">
+            <button type="button" className="ghost" onClick={() => setRange((r) => zoomRange(r, 1 / 1.25))}>
+              放大
+            </button>
+            <button type="button" className="ghost" onClick={() => setRange((r) => zoomRange(r, 1.25))}>
+              缩小
+            </button>
+            <button type="button" className="ghost" onClick={() => setRange(fitRangeToPoints(points))}>
+              适应数据
+            </button>
+            <button type="button" className="ghost" onClick={() => setRange(DEFAULT_RANGE)}>
+              复位
+            </button>
+          </div>
           <div className="chart-frame">
             <ForceChart
               points={points}
@@ -178,11 +235,12 @@ export default function App() {
               unitSystem={unitSystem}
               onChange={setPoints}
               onSelect={setSelectedId}
+              onRangeChange={setRange}
               onProbe={setProbe}
             />
           </div>
           <p className="hint">
-            单击添加 · 拖拽移动 · 双击删除 · 鼠标沿曲线滑动查看当前蓄能与蓄能系数
+            滚轮缩放 · Alt+拖拽或中键平移 · 单击添加 · 拖拽测点 · 双击删除 · 悬停看蓄能系数
           </p>
           {probe && (
             <div className="probe-live" aria-live="polite">
