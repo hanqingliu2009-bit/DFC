@@ -1,0 +1,75 @@
+{
+  "name": "dfc",
+  "productName": "DFC拉力曲线",
+  "private": true,
+  "version": "1.0.0",
+  "description": "拉力曲线绘制与蓄能计算工具",
+  "author": "DFC",
+  "type": "module",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "pack": "npm run build && electron-builder --win dir --x64 && node scripts/zip-green.mjs",
+    "pack:portable": "npm run build && electron-builder --win portable --x64",
+    "pack:dir": "npm run build && electron-builder --win dir --x64",
+    "pack:zip": "npm run pack"
+  },
+  "build": {
+    "appId": "com.dfc.drawforcecurve",
+    "productName": "DFC拉力曲线",
+    "copyright": "Copyright © DFC",
+    "directories": {
+      "output": "D:/dev/DFC-release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "electron/main.mjs"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    },
+    "asar": true
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^9.2.4",
+    "electron": "^39.8.10",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.71.0",
+    "png-to-ico": "^3.0.2",
+    "rcedit": "^4.0.1",
+    "sharp": "^0.35.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "wait-on": "^9.0.10"
+  }
+}
