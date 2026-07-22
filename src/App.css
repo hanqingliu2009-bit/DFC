@@ -84,6 +84,11 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   margin-bottom: 0.55rem;
+  align-items: center;
+}
+
+.curve-switch {
+  margin-right: 0.35rem;
 }
 
 .chart-toolbar button.ghost {

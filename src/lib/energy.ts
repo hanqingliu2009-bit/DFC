@@ -1,40 +1,63 @@
 import type { CurveProbe, EnergyResult, ForcePoint } from './types'
+import {
+  buildNaturalCubicSpline,
+  evalSpline,
+  sampleSpline,
+  splineToBezierSegments,
+  type BezierSegment,
+  type SamplePoint,
+  type Spline,
+} from './spline'
 import { CM_PER_INCH, KG_PER_LB, type UnitSystem } from './units'
 
 /** lbf · cm → J  (1 lbf = 4.4482216152605 N, 1 cm = 0.01 m) */
 const LBF_CM_TO_JOULE = 4.4482216152605 * 0.01
+/** Dense samples between each pair of measured knots */
+const SAMPLES_PER_SEGMENT = 14
 
 function sortedPoints(points: ForcePoint[]): ForcePoint[] {
   return [...points].sort((a, b) => a.xCm - b.xCm || a.yLb - b.yLb)
 }
 
-function forceAtX(sorted: ForcePoint[], xCm: number): number {
-  if (sorted.length === 0) return 0
-  if (xCm <= sorted[0].xCm) return sorted[0].yLb
-  if (xCm >= sorted[sorted.length - 1].xCm) return sorted[sorted.length - 1].yLb
-
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const a = sorted[i]
-    const b = sorted[i + 1]
-    if (xCm >= a.xCm && xCm <= b.xCm) {
-      const span = b.xCm - a.xCm
-      if (span <= 0) return a.yLb
-      const t = (xCm - a.xCm) / span
-      return a.yLb + t * (b.yLb - a.yLb)
-    }
-  }
-  return sorted[sorted.length - 1].yLb
+export function buildCurveSpline(points: ForcePoint[]): Spline | null {
+  const sorted = sortedPoints(points)
+  if (sorted.length < 2) return null
+  return buildNaturalCubicSpline(
+    sorted.map((p) => p.xCm),
+    sorted.map((p) => p.yLb),
+  )
 }
 
-/** Area under curve from x0 to xEnd, in Lb·cm */
-function areaLbCmTo(sorted: ForcePoint[], xEnd: number): number {
-  const x0 = sorted[0].xCm
-  const x = Math.min(Math.max(xEnd, x0), sorted[sorted.length - 1].xCm)
+export type CurveMode = 'linear' | 'spline'
+
+/** Dense polyline used for both rendering and energy integration */
+export function sampleForceCurve(
+  points: ForcePoint[],
+  mode: CurveMode = 'spline',
+): SamplePoint[] {
+  const sorted = sortedPoints(points)
+  if (sorted.length < 2) return []
+  if (mode === 'linear') {
+    return sorted.map((p) => ({ xCm: p.xCm, yLb: p.yLb }))
+  }
+  const spline = buildCurveSpline(sorted)
+  if (!spline) return sorted.map((p) => ({ xCm: p.xCm, yLb: p.yLb }))
+  return sampleSpline(spline, SAMPLES_PER_SEGMENT)
+}
+
+export function forceCurveBeziers(points: ForcePoint[]): BezierSegment[] {
+  const spline = buildCurveSpline(points)
+  if (!spline) return []
+  return splineToBezierSegments(spline)
+}
+
+function areaLbCmTo(samples: SamplePoint[], x0: number, xEnd: number): number {
+  const x = Math.min(Math.max(xEnd, x0), samples[samples.length - 1].xCm)
   let area = 0
 
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const a = sorted[i]
-    const b = sorted[i + 1]
+  for (let i = 0; i < samples.length - 1; i++) {
+    const a = samples[i]
+    const b = samples[i + 1]
     if (b.xCm <= x0 || a.xCm >= x) continue
 
     const left = Math.max(a.xCm, x0)
@@ -52,19 +75,40 @@ function areaLbCmTo(sorted: ForcePoint[], xEnd: number): number {
   return area
 }
 
-/**
- * Probe the curve at a draw length.
- * 蓄能系数 = ∫F dx / (½ · 拉距 · 当前拉力)
- */
-export function probeCurveAt(points: ForcePoint[], xTarget: number): CurveProbe | null {
+export function probeCurveAt(
+  points: ForcePoint[],
+  xTarget: number,
+  mode: CurveMode = 'spline',
+): CurveProbe | null {
   const sorted = sortedPoints(points)
   if (sorted.length < 2) return null
 
-  const x0 = sorted[0].xCm
-  const xMax = sorted[sorted.length - 1].xCm
+  const samples = sampleForceCurve(sorted, mode)
+  if (samples.length < 2) return null
+
+  const x0 = samples[0].xCm
+  const xMax = samples[samples.length - 1].xCm
   const xCm = Math.min(xMax, Math.max(x0, xTarget))
-  const yLb = forceAtX(sorted, xCm)
-  const areaLbCm = areaLbCmTo(sorted, xCm)
+
+  let yLb: number
+  if (mode === 'spline') {
+    const spline = buildCurveSpline(sorted)
+    yLb = spline ? evalSpline(spline, xCm) : samples[0].yLb
+  } else {
+    // linear interpolate on knots
+    yLb = samples[0].yLb
+    for (let i = 0; i < samples.length - 1; i++) {
+      const a = samples[i]
+      const b = samples[i + 1]
+      if (xCm >= a.xCm && xCm <= b.xCm) {
+        const span = b.xCm - a.xCm
+        yLb = span <= 0 ? a.yLb : a.yLb + ((xCm - a.xCm) / span) * (b.yLb - a.yLb)
+        break
+      }
+    }
+  }
+
+  const areaLbCm = areaLbCmTo(samples, x0, xCm)
   const joules = areaLbCm * LBF_CM_TO_JOULE
   const span = xCm - x0
   const triangleLbCm = 0.5 * span * yLb
@@ -74,15 +118,22 @@ export function probeCurveAt(points: ForcePoint[], xTarget: number): CurveProbe 
   return { xCm, yLb, joules, energyCoefficient }
 }
 
-/** Trapezoidal integration of force×displacement → stored energy */
-export function computeEnergy(points: ForcePoint[]): EnergyResult | null {
+/** Trapezoidal integration on curve samples → stored energy */
+export function computeEnergy(
+  points: ForcePoint[],
+  mode: CurveMode = 'spline',
+): EnergyResult | null {
   const sorted = sortedPoints(points)
   if (sorted.length < 2) return null
 
-  const probe = probeCurveAt(sorted, sorted[sorted.length - 1].xCm)
+  const probe = probeCurveAt(sorted, sorted[sorted.length - 1].xCm, mode)
   if (!probe) return null
 
-  const peakForceLb = Math.max(...sorted.map((p) => p.yLb))
+  const samples = sampleForceCurve(sorted, mode)
+  const peakForceLb = Math.max(
+    ...sorted.map((p) => p.yLb),
+    ...samples.map((s) => s.yLb),
+  )
   const peakForceKg = peakForceLb * KG_PER_LB
   const drawLengthCm = sorted[sorted.length - 1].xCm - sorted[0].xCm
   const drawLengthIn = drawLengthCm / CM_PER_INCH
@@ -146,16 +197,42 @@ export function pointsToCsv(points: ForcePoint[], system: UnitSystem = 'metric')
   const sorted = sortedPoints(points)
   if (system === 'imperial') {
     const rows = [
-      'draw_in,force_lb',
+      '拉距_in,拉力_lb',
       ...sorted.map((p) => `${roundCoord(p.xCm / CM_PER_INCH, 4)},${p.yLb}`),
     ]
     return rows.join('\n')
   }
   const rows = [
-    'draw_cm,force_kg',
+    '拉距_cm,拉力_kg',
     ...sorted.map((p) => `${p.xCm},${roundCoord(p.yLb * KG_PER_LB, 4)}`),
   ]
   return rows.join('\n')
+}
+
+/** 解析 CSV 首行：识别中英文表头与单位关键词 */
+function parseCsvHeader(firstLine: string): {
+  hasHeader: boolean
+  lengthIsInch: boolean
+  forceIsKg: boolean
+} {
+  const text = firstLine.trim()
+  const lower = text.toLowerCase()
+  const both = `${text} ${lower}`
+
+  const hasLengthWord = /拉距|行程|draw|length/.test(both)
+  const hasForceWord = /拉力|力值|force/.test(both)
+  const hasCm = /厘米|公分|(^|[^a-z])cm([^a-z]|$)/i.test(both)
+  const hasInch = /英寸|吋|inch|(^|[^a-z])in([^a-z]|$)/i.test(both)
+  const hasLb = /磅|(^|[^a-z])lbf?([^a-z]|$)/i.test(both)
+  const hasKg = /千克|公斤|(^|[^a-z])kgf?([^a-z]|$)/i.test(both)
+
+  const hasHeader =
+    hasLengthWord || hasForceWord || hasCm || hasInch || hasLb || hasKg
+
+  const lengthIsInch = hasInch && !hasCm
+  const forceIsKg = hasKg && !hasLb
+
+  return { hasHeader, lengthIsInch, forceIsKg }
 }
 
 export function parseCsv(text: string): ForcePoint[] {
@@ -166,18 +243,8 @@ export function parseCsv(text: string): ForcePoint[] {
     .filter(Boolean)
   if (!lines.length) return []
 
-  const header = lines[0].toLowerCase()
-  const hasHeader =
-    header.includes('force') ||
-    header.includes('lb') ||
-    header.includes('kg') ||
-    header.includes('draw') ||
-    header.includes('cm') ||
-    header.includes('in')
+  const { hasHeader, lengthIsInch, forceIsKg } = parseCsvHeader(lines[0])
   const start = hasHeader ? 1 : 0
-
-  const lengthIsInch = header.includes('in') && !header.includes('cm')
-  const forceIsKg = header.includes('kg') && !header.includes('lb')
 
   const points: ForcePoint[] = []
   for (let i = start; i < lines.length; i++) {

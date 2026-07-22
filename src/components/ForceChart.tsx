@@ -8,7 +8,16 @@ import {
   type SyntheticEvent,
 } from 'react'
 import type { AxisRange, CurveProbe, ForcePoint } from '../lib/types'
-import { createPoint, formatNumber, probeCurveAt, roundCoord, sortedPoints } from '../lib/energy'
+import {
+  createPoint,
+  forceCurveBeziers,
+  formatNumber,
+  probeCurveAt,
+  roundCoord,
+  sampleForceCurve,
+  sortedPoints,
+  type CurveMode,
+} from '../lib/energy'
 import {
   cmToDisplay,
   displayToCm,
@@ -24,6 +33,7 @@ type Props = {
   range: AxisRange
   selectedId: string | null
   unitSystem: UnitSystem
+  curveMode: CurveMode
   onChange: (points: ForcePoint[]) => void
   onSelect: (id: string | null) => void
   onRangeChange: (range: AxisRange) => void
@@ -41,6 +51,7 @@ export function ForceChart({
   range,
   selectedId,
   unitSystem,
+  curveMode,
   onChange,
   onSelect,
   onRangeChange,
@@ -160,10 +171,40 @@ export function ForceChart({
   }, [toData])
 
   const sorted = useMemo(() => sortedPoints(points), [points])
+  const curveSamples = useMemo(
+    () => sampleForceCurve(sorted, curveMode),
+    [sorted, curveMode],
+  )
+  const beziers = useMemo(
+    () => (curveMode === 'spline' ? forceCurveBeziers(sorted) : []),
+    [sorted, curveMode],
+  )
   const x0 = sorted.length ? sorted[0].xCm : 0
 
   const pathD =
-    sorted.length >= 2
+    curveMode === 'spline' && beziers.length > 0
+      ? (() => {
+          const first = toPixel(beziers[0].x0, beziers[0].y0)
+          let d = `M ${first.px} ${first.py}`
+          for (const s of beziers) {
+            const c1 = toPixel(s.x1, s.y1)
+            const c2 = toPixel(s.x2, s.y2)
+            const end = toPixel(s.x3, s.y3)
+            d += ` C ${c1.px} ${c1.py}, ${c2.px} ${c2.py}, ${end.px} ${end.py}`
+          }
+          return d
+        })()
+      : curveSamples.length >= 2
+        ? curveSamples
+            .map((p, i) => {
+              const { px, py } = toPixel(p.xCm, p.yLb)
+              return `${i === 0 ? 'M' : 'L'} ${px} ${py}`
+            })
+            .join(' ')
+        : ''
+
+  const linearGhostD =
+    curveMode === 'spline' && sorted.length >= 2
       ? sorted
           .map((p, i) => {
             const { px, py } = toPixel(p.xCm, p.yLb)
@@ -173,16 +214,19 @@ export function ForceChart({
       : ''
 
   const areaD =
-    sorted.length >= 2
+    curveSamples.length >= 2
       ? (() => {
-          const first = toPixel(sorted[0].xCm, range.yMin)
-          const last = toPixel(sorted[sorted.length - 1].xCm, range.yMin)
-          const curve = sorted
-            .map((p, i) => {
-              const { px, py } = toPixel(p.xCm, p.yLb)
-              return `${i === 0 ? 'M' : 'L'} ${px} ${py}`
-            })
-            .join(' ')
+          const first = toPixel(curveSamples[0].xCm, range.yMin)
+          const last = toPixel(curveSamples[curveSamples.length - 1].xCm, range.yMin)
+          const curve =
+            curveMode === 'spline' && pathD
+              ? pathD
+              : curveSamples
+                  .map((p, i) => {
+                    const { px, py } = toPixel(p.xCm, p.yLb)
+                    return `${i === 0 ? 'M' : 'L'} ${px} ${py}`
+                  })
+                  .join(' ')
           return `${curve} L ${last.px} ${last.py} L ${first.px} ${first.py} Z`
         })()
       : ''
@@ -218,7 +262,7 @@ export function ForceChart({
       publishProbe(null)
       return
     }
-    publishProbe(probeCurveAt(sorted, xCm))
+    publishProbe(probeCurveAt(sorted, xCm, curveMode))
   }
 
   function beginInteract(e: ReactPointerEvent) {
@@ -482,6 +526,17 @@ export function ForceChart({
       </text>
 
       {areaD && <path d={areaD} fill="url(#areaFill)" pointerEvents="none" />}
+      {linearGhostD && (
+        <path
+          d={linearGhostD}
+          fill="none"
+          stroke="var(--muted)"
+          strokeWidth={1.5}
+          strokeDasharray="4 4"
+          opacity={0.55}
+          pointerEvents="none"
+        />
+      )}
       {pathD && (
         <path
           d={pathD}

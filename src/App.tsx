@@ -8,6 +8,7 @@ import {
   pointsToCsv,
   sampleCurve,
   sortedPoints,
+  type CurveMode,
 } from './lib/energy'
 import type { AxisRange, CurveProbe, ForcePoint } from './lib/types'
 import {
@@ -76,9 +77,10 @@ export default function App() {
   const [draftY, setDraftY] = useState('')
   const [probe, setProbe] = useState<CurveProbe | null>(null)
   const [unitSystem, setUnitSystem] = useState<UnitSystem>('metric')
+  const [curveMode, setCurveMode] = useState<CurveMode>('spline')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const energy = useMemo(() => computeEnergy(points), [points])
+  const energy = useMemo(() => computeEnergy(points, curveMode), [points, curveMode])
   const sorted = useMemo(() => sortedPoints(points), [points])
   const selected = points.find((p) => p.id === selectedId) ?? null
   const lenUnit = lengthLabel(unitSystem)
@@ -214,6 +216,22 @@ export default function App() {
       <main className="layout">
         <section className="chart-panel" aria-label="拉力曲线图">
           <div className="chart-toolbar">
+            <div className="unit-switch curve-switch" role="group" aria-label="曲线模式">
+              <button
+                type="button"
+                className={curveMode === 'linear' ? 'is-active' : ''}
+                onClick={() => setCurveMode('linear')}
+              >
+                折线
+              </button>
+              <button
+                type="button"
+                className={curveMode === 'spline' ? 'is-active' : ''}
+                onClick={() => setCurveMode('spline')}
+              >
+                平滑样条
+              </button>
+            </div>
             <button type="button" className="ghost" onClick={() => setRange((r) => zoomRange(r, 1 / 1.25))}>
               放大
             </button>
@@ -233,6 +251,7 @@ export default function App() {
               range={range}
               selectedId={selectedId}
               unitSystem={unitSystem}
+              curveMode={curveMode}
               onChange={setPoints}
               onSelect={setSelectedId}
               onRangeChange={setRange}
@@ -240,7 +259,11 @@ export default function App() {
             />
           </div>
           <p className="hint">
-            滚轮缩放 · Alt+拖拽或中键平移 · 单击添加 · 拖拽测点 · 双击删除 · 悬停看蓄能系数
+            {curveMode === 'spline'
+              ? '平滑模式：橙色为样条曲线，灰色虚线为折线对照；蓄能按样条加密点积分'
+              : '折线模式：测点直线相连；蓄能按折线梯形积分'}
+            {' · '}
+            滚轮缩放 · Alt/中键平移
           </p>
           {probe && (
             <div className="probe-live" aria-live="polite">
@@ -319,7 +342,7 @@ export default function App() {
               <p className="empty-energy">至少需要 2 个测点才能计算蓄能。</p>
             )}
             <p className="formula">
-              蓄能系数 = 曲线下面积 ÷（½ × 拉距 × 当前拉力）；能量始终按物理量计算（J）
+              蓄能系数 = 曲线下面积 ÷（½ × 拉距 × 当前拉力）；曲线为三次样条加密采样后积分
             </p>
           </section>
 
