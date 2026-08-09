@@ -11,7 +11,7 @@ import {
   sortedPoints,
   type CurveMode,
 } from './lib/energy'
-import { downloadElementPng } from './lib/exportImage'
+import { downloadExportPng } from './lib/exportImage'
 import type { AxisRange, CurveProbe, CurveSeries, EnergyResult, ForcePoint } from './lib/types'
 import {
   cmToDisplay,
@@ -221,7 +221,7 @@ export default function App() {
   const [editMode, setEditMode] = useState(false)
   const [exporting, setExporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const exportRef = useRef<HTMLDivElement>(null)
+  const chartFrameRef = useRef<HTMLDivElement>(null)
 
   const active = series.find((s) => s.id === activeId) ?? null
   const points = active?.points ?? []
@@ -311,13 +311,32 @@ export default function App() {
   }
 
   async function exportImage() {
-    const el = exportRef.current
-    if (!el || exporting) return
+    if (exporting || !series.length) return
     setExporting(true)
     setProbe(null)
     try {
-      await new Promise((r) => requestAnimationFrame(() => r(null)))
-      await downloadElementPng(el, `dfc-拉力曲线-${new Date().toISOString().slice(0, 10)}.png`)
+      const frame = chartFrameRef.current
+      const rect = frame?.getBoundingClientRect()
+      const chartSize = {
+        w: Math.round(rect?.width || frame?.clientWidth || 720),
+        h: Math.round(rect?.height || frame?.clientHeight || 480),
+      }
+      await downloadExportPng(
+        {
+          series,
+          rows: seriesEnergies.map(({ id, name, color, energy }) => ({
+            id,
+            name,
+            color,
+            energy,
+          })),
+          range,
+          unitSystem,
+          curveMode,
+          chartSize,
+        },
+        `dfc-拉力曲线-${new Date().toISOString().slice(0, 10)}.png`,
+      )
     } catch (err) {
       console.error(err)
       window.alert('导出图片失败，请重试。')
@@ -484,7 +503,7 @@ export default function App() {
             </button>
           </div>
 
-          <div className="export-bundle" ref={exportRef}>
+          <div className="export-bundle">
             <div className="export-head">
               <span className="export-brand">DFC 拉力曲线</span>
               <span className="export-meta">
@@ -495,7 +514,7 @@ export default function App() {
               </span>
             </div>
             <div className="export-body">
-              <div className="chart-frame">
+              <div className="chart-frame" ref={chartFrameRef}>
                 <ForceChart
                   series={series}
                   activeId={activeId}

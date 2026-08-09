@@ -1,0 +1,302 @@
+/* Dedicated export composition — independent of the live app chrome */
+
+.export-sheet {
+  box-sizing: border-box;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  border: 1px solid var(--stroke);
+}
+
+.export-sheet *,
+.export-sheet *::before,
+.export-sheet *::after {
+  box-sizing: border-box;
+}
+
+.export-sheet--side {
+  display: grid;
+  grid-template-columns: auto minmax(300px, 340px);
+  grid-template-areas:
+    'head head'
+    'legend legend'
+    'chart details'
+    'foot foot';
+}
+
+.export-sheet--stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.export-sheet-head {
+  grid-area: head;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem 0.85rem;
+  border-bottom: 1px solid var(--stroke);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--chart-bg) 85%, #fff) 0%, var(--panel) 100%);
+}
+
+.export-sheet-brand {
+  margin: 0;
+  font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-weight: 800;
+  font-size: 1.75rem;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.export-sheet-head h1 {
+  margin: 0.25rem 0 0;
+  font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent-ink);
+}
+
+.export-sheet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem 0.85rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+}
+
+.export-sheet-legend {
+  grid-area: legend;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1rem;
+  padding: 0.55rem 1.25rem;
+  border-bottom: 1px solid var(--stroke);
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+.export-sheet-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.export-sheet-legend-item i,
+.export-sheet-name i,
+.export-sheet-card h3 i {
+  display: inline-block;
+  width: 0.9rem;
+  height: 3px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.export-sheet-chart-wrap {
+  grid-area: chart;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--chart-bg);
+  border-bottom: 1px solid var(--stroke);
+}
+
+.export-sheet--side .export-sheet-chart-wrap {
+  border-right: 1px solid var(--stroke);
+  border-bottom: none;
+  justify-content: stretch;
+  align-items: stretch;
+}
+
+.export-sheet-chart {
+  flex: 0 0 auto;
+  background: var(--chart-bg);
+  /* width/height set inline from live chart-frame */
+}
+
+.export-sheet-chart .force-chart {
+  width: 100%;
+  height: 100%;
+  cursor: default;
+}
+
+.export-sheet-summary {
+  padding: 0.9rem 1.25rem 0.35rem;
+}
+
+.export-sheet-summary h2,
+.export-sheet-details h2 {
+  margin: 0 0 0.65rem;
+  font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.export-sheet-summary table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  background: var(--chart-bg);
+  border: 1px solid var(--stroke);
+}
+
+.export-sheet-summary th,
+.export-sheet-summary td {
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--stroke);
+  vertical-align: middle;
+}
+
+.export-sheet-summary th {
+  background: #eef1f4;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.export-sheet-summary tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.export-sheet-summary td {
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 0.78rem;
+}
+
+.export-sheet-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.export-sheet-details {
+  grid-area: details;
+  padding: 0.85rem 1.25rem 0.35rem;
+}
+
+.export-sheet--side .export-sheet-details {
+  padding: 0.85rem 1rem;
+  align-self: stretch;
+  overflow: visible;
+}
+
+.export-sheet-cards {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.export-sheet-cards.cols-1 {
+  grid-template-columns: 1fr;
+}
+
+.export-sheet-cards.cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.export-sheet-card {
+  border: 1px solid var(--stroke);
+  background: var(--chart-bg);
+  padding: 0.7rem 0.8rem 0.75rem;
+  border-top: 3px solid var(--series-accent, var(--accent));
+}
+
+.export-sheet-card h3 {
+  margin: 0 0 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.export-sheet-card h3 i {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+.export-sheet-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.export-sheet-card dl > div {
+  padding: 0.35rem 0.4rem;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+}
+
+.export-sheet-card dl > div.is-primary {
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, var(--series-accent, var(--accent)) 45%, var(--stroke));
+  background: color-mix(in srgb, var(--series-accent, var(--accent)) 8%, var(--chart-bg));
+}
+
+.export-sheet-card dt {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.export-sheet-card dd {
+  margin: 0.15rem 0 0;
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.export-sheet-card dd small {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.export-sheet-card .is-primary dd {
+  font-size: 1.35rem;
+  color: var(--series-accent, var(--accent-ink));
+}
+
+.export-sheet-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.export-sheet-foot {
+  grid-area: foot;
+  padding: 0.65rem 1.25rem 0.9rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  border-top: 1px solid var(--stroke);
+  margin-top: 0.55rem;
+}
+
+.export-sheet--side .export-sheet-foot {
+  margin-top: 0;
+}
+
+/* Many curves: keep cards readable in a long portrait sheet */
+.export-sheet[data-series-count='5'] .export-sheet-cards.cols-2,
+.export-sheet[data-series-count='6'] .export-sheet-cards.cols-2,
+.export-sheet[data-series-count='7'] .export-sheet-cards.cols-2,
+.export-sheet[data-series-count='8'] .export-sheet-cards.cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.export-sheet[data-series-count='1'] .export-sheet-card dl > div.is-primary dd {
+  font-size: 1.55rem;
+}

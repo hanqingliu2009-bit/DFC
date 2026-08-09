@@ -38,6 +38,10 @@ type Props = {
   curveMode: CurveMode
   /** 编辑模式：可加点 / 拖点 / 双击删点；浏览模式：拖拽平移视图 */
   editMode: boolean
+  /** 导出用：各曲线等权绘制，无面积高亮 */
+  uniformCurves?: boolean
+  /** 固定像素尺寸（与浏览区一致时用于导出，避免被容器横向拉扁） */
+  fixedSize?: { w: number; h: number }
   onChange: (points: ForcePoint[]) => void
   onSelect: (id: string | null) => void
   onSelectSeries: (id: string) => void
@@ -59,6 +63,8 @@ export function ForceChart({
   unitSystem,
   curveMode,
   editMode,
+  uniformCurves = false,
+  fixedSize,
   onChange,
   onSelect,
   onSelectSeries,
@@ -66,7 +72,7 @@ export function ForceChart({
   onProbe,
 }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
-  const [size, setSize] = useState({ w: 800, h: 480 })
+  const [size, setSize] = useState(() => fixedSize ?? { w: 800, h: 480 })
   const dragId = useRef<string | null>(null)
   const dragOrigin = useRef<{ x: number; y: number } | null>(null)
   const dragging = useRef(false)
@@ -91,6 +97,13 @@ export function ForceChart({
   const activeColor = active?.color ?? 'var(--accent)'
 
   useEffect(() => {
+    if (fixedSize) {
+      setSize({
+        w: Math.max(320, fixedSize.w),
+        h: Math.max(280, fixedSize.h),
+      })
+      return
+    }
     const el = svgRef.current
     if (!el) return
     const ro = new ResizeObserver((entries) => {
@@ -106,7 +119,7 @@ export function ForceChart({
       el.removeEventListener('selectstart', preventSelect)
       document.body.classList.remove('is-chart-dragging')
     }
-  }, [])
+  }, [fixedSize])
 
   const plotW = size.w - PAD.left - PAD.right
   const plotH = size.h - PAD.top - PAD.bottom
@@ -500,27 +513,33 @@ export function ForceChart({
         }
       : null
 
-  const inactiveSeries = drawnSeries.filter((s) => !s.active)
-  const activeDrawn = drawnSeries.find((s) => s.active)
+  const inactiveSeries = uniformCurves
+    ? drawnSeries
+    : drawnSeries.filter((s) => !s.active)
+  const activeDrawn = uniformCurves ? null : drawnSeries.find((s) => s.active)
+  const showArea = !uniformCurves && Boolean(areaD)
+  const showActivePoints = !uniformCurves
 
   return (
     <svg
       ref={svgRef}
-      className={`force-chart${isPanning ? ' is-panning' : ''}${editMode ? ' is-editing' : ''}`}
+      className={`force-chart${isPanning ? ' is-panning' : ''}${editMode ? ' is-editing' : ''}${uniformCurves ? ' is-export' : ''}`}
       viewBox={`0 0 ${size.w} ${size.h}`}
       preserveAspectRatio="none"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      onPointerLeave={onPointerLeave}
-      onDoubleClick={onDoubleClick}
+      onPointerDown={uniformCurves ? undefined : onPointerDown}
+      onPointerMove={uniformCurves ? undefined : onPointerMove}
+      onPointerUp={uniformCurves ? undefined : onPointerUp}
+      onPointerCancel={uniformCurves ? undefined : onPointerUp}
+      onPointerLeave={uniformCurves ? undefined : onPointerLeave}
+      onDoubleClick={uniformCurves ? undefined : onDoubleClick}
       onDragStart={onDragStart}
       role="img"
       aria-label={
-        editMode
-          ? '编辑模式：点击添加测点，拖拽调整，双击曲线切换，双击测点删除'
-          : '浏览模式：拖拽平移，双击曲线切换当前曲线'
+        uniformCurves
+          ? '拉力曲线导出图'
+          : editMode
+            ? '编辑模式：点击添加测点，拖拽调整，双击曲线切换，双击测点删除'
+            : '浏览模式：拖拽平移，双击曲线切换当前曲线'
       }
     >
       <defs>
@@ -623,10 +642,10 @@ export function ForceChart({
               d={s.pathD}
               fill="none"
               stroke={s.color}
-              strokeWidth={2}
+              strokeWidth={uniformCurves ? 2.5 : 2}
               strokeLinejoin="round"
               strokeLinecap="round"
-              opacity={0.75}
+              opacity={uniformCurves ? 0.95 : 0.75}
             />
             {s.knots.map((p) => {
               const { px, py } = toPixel(p.xCm, p.yLb)
@@ -637,11 +656,15 @@ export function ForceChart({
                   data-series-id={s.id}
                   cx={px}
                   cy={py}
-                  r={2.8}
+                  r={uniformCurves ? 3.2 : 2.8}
                   fill={s.color}
                   stroke="none"
-                  opacity={0.85}
-                  style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                  opacity={0.9}
+                  style={
+                    uniformCurves
+                      ? undefined
+                      : { pointerEvents: 'auto', cursor: 'pointer' }
+                  }
                 />
               )
             })}
@@ -649,8 +672,8 @@ export function ForceChart({
         ) : null,
       )}
 
-      {areaD && <path d={areaD} fill="url(#areaFill)" pointerEvents="none" />}
-      {linearGhostD && (
+      {showArea && areaD && <path d={areaD} fill="url(#areaFill)" pointerEvents="none" />}
+      {!uniformCurves && linearGhostD && (
         <path
           d={linearGhostD}
           fill="none"
@@ -673,7 +696,7 @@ export function ForceChart({
         />
       )}
 
-      {triangle && (
+      {!uniformCurves && triangle && (
         <g pointerEvents="none" className="probe-overlay">
           <path
             d={`M ${triangle.base0.px} ${triangle.base0.py} L ${triangle.base1.px} ${triangle.base1.py} L ${triangle.tip.px} ${triangle.tip.py} Z`}
@@ -704,32 +727,33 @@ export function ForceChart({
         </g>
       )}
 
-      {sorted.map((p) => {
-        const { px, py } = toPixel(p.xCm, p.yLb)
-        const selected = p.id === selectedId
-        return (
-          <g
-            key={p.id}
-            data-point-id={p.id}
-            data-series-id={activeId ?? undefined}
-            style={{ cursor: editMode ? 'grab' : 'pointer', pointerEvents: 'auto' }}
-          >
-            {editMode && (
-              <circle data-point-id={p.id} cx={px} cy={py} r={8} fill="transparent" />
-            )}
-            <circle
+      {showActivePoints &&
+        sorted.map((p) => {
+          const { px, py } = toPixel(p.xCm, p.yLb)
+          const selected = p.id === selectedId
+          return (
+            <g
+              key={p.id}
               data-point-id={p.id}
-              cx={px}
-              cy={py}
-              r={selected ? 5 : 3.6}
-              fill={activeColor}
-              stroke="none"
-            />
-          </g>
-        )
-      })}
+              data-series-id={activeId ?? undefined}
+              style={{ cursor: editMode ? 'grab' : 'pointer', pointerEvents: 'auto' }}
+            >
+              {editMode && (
+                <circle data-point-id={p.id} cx={px} cy={py} r={8} fill="transparent" />
+              )}
+              <circle
+                data-point-id={p.id}
+                cx={px}
+                cy={py}
+                r={selected ? 5 : 3.6}
+                fill={activeColor}
+                stroke="none"
+              />
+            </g>
+          )
+        })}
 
-      {probe && tipBox && (
+      {!uniformCurves && probe && tipBox && (
         <g pointerEvents="none" className="probe-tip">
           <rect
             x={tipBox.x}
