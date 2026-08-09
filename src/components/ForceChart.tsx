@@ -4,10 +4,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type SyntheticEvent,
 } from 'react'
-import type { AxisRange, CurveProbe, ForcePoint } from '../lib/types'
+import type { AxisRange, CurveProbe, CurveSeries, ForcePoint } from '../lib/types'
 import {
   createPoint,
   forceCurveBeziers,
@@ -29,31 +30,38 @@ import {
 } from '../lib/units'
 
 type Props = {
-  points: ForcePoint[]
+  series: CurveSeries[]
+  activeId: string | null
   range: AxisRange
   selectedId: string | null
   unitSystem: UnitSystem
   curveMode: CurveMode
+  /** 编辑模式：可加点 / 拖点 / 双击删点；浏览模式：拖拽平移视图 */
+  editMode: boolean
   onChange: (points: ForcePoint[]) => void
   onSelect: (id: string | null) => void
+  onSelectSeries: (id: string) => void
   onRangeChange: (range: AxisRange) => void
   onProbe?: (probe: CurveProbe | null) => void
 }
 
 const PAD = { top: 28, right: 24, bottom: 48, left: 56 }
-const DBL_MS = 350
 const MIN_X_SPAN_CM = 2
 const MIN_Y_SPAN_LB = 2
 const ZOOM_STEP = 1.15
+const CURVE_HIT_PX = 16
 
 export function ForceChart({
-  points,
+  series,
+  activeId,
   range,
   selectedId,
   unitSystem,
   curveMode,
+  editMode,
   onChange,
   onSelect,
+  onSelectSeries,
   onRangeChange,
   onProbe,
 }: Props) {
@@ -67,9 +75,7 @@ export function ForceChart({
     startY: number
     range: AxisRange
   } | null>(null)
-  const lastPointClick = useRef<{ id: string; at: number } | null>(null)
-  const pointsRef = useRef(points)
-  pointsRef.current = points
+  const pointsRef = useRef<ForcePoint[]>([])
   const rangeRef = useRef(range)
   rangeRef.current = range
   const onRangeChangeRef = useRef(onRangeChange)
@@ -78,6 +84,11 @@ export function ForceChart({
   onProbeRef.current = onProbe
   const [probe, setProbe] = useState<CurveProbe | null>(null)
   const [isPanning, setIsPanning] = useState(false)
+
+  const active = series.find((s) => s.id === activeId) ?? null
+  const points = active?.points ?? []
+  pointsRef.current = points
+  const activeColor = active?.color ?? 'var(--accent)'
 
   useEffect(() => {
     const el = svgRef.current
@@ -110,16 +121,25 @@ export function ForceChart({
     [plotW, plotH, range, xSpan, ySpan],
   )
 
+  const clientToPixel = useCallback(
+    (clientX: number, clientY: number) => {
+      const svg = svgRef.current
+      if (!svg) return { px: 0, py: 0 }
+      const rect = svg.getBoundingClientRect()
+      return {
+        px: ((clientX - rect.left) / rect.width) * size.w,
+        py: ((clientY - rect.top) / rect.height) * size.h,
+      }
+    },
+    [size],
+  )
+
   const toData = useCallback(
     (clientX: number, clientY: number, clamp = true) => {
-      const svg = svgRef.current
       const r = rangeRef.current
       const xSp = Math.max(r.xMax - r.xMin, 1e-6)
       const ySp = Math.max(r.yMax - r.yMin, 1e-6)
-      if (!svg) return { xCm: 0, yLb: 0 }
-      const rect = svg.getBoundingClientRect()
-      const px = ((clientX - rect.left) / rect.width) * size.w
-      const py = ((clientY - rect.top) / rect.height) * size.h
+      const { px, py } = clientToPixel(clientX, clientY)
       let xCm = r.xMin + ((px - PAD.left) / plotW) * xSp
       let yLb = r.yMin + (1 - (py - PAD.top) / plotH) * ySp
       if (clamp) {
@@ -131,7 +151,7 @@ export function ForceChart({
         yLb: roundCoord(yLb),
       }
     },
-    [size, plotW, plotH],
+    [clientToPixel, plotW, plotH],
   )
 
   useEffect(() => {
@@ -150,7 +170,6 @@ export function ForceChart({
       let nextYSpan = ySp * factor
       if (nextXSpan < MIN_X_SPAN_CM) nextXSpan = MIN_X_SPAN_CM
       if (nextYSpan < MIN_Y_SPAN_LB) nextYSpan = MIN_Y_SPAN_LB
-      // 限制放得过大
       if (nextXSpan > 5000) nextXSpan = 5000
       if (nextYSpan > 5000) nextYSpan = 5000
 
@@ -180,28 +199,26 @@ export function ForceChart({
     [sorted, curveMode],
   )
   const x0 = sorted.length ? sorted[0].xCm : 0
+  const pathD = curvePathD(sorted, curveSamples, beziers, curveMode, toPixel)
 
-  const pathD =
-    curveMode === 'spline' && beziers.length > 0
-      ? (() => {
-          const first = toPixel(beziers[0].x0, beziers[0].y0)
-          let d = `M ${first.px} ${first.py}`
-          for (const s of beziers) {
-            const c1 = toPixel(s.x1, s.y1)
-            const c2 = toPixel(s.x2, s.y2)
-            const end = toPixel(s.x3, s.y3)
-            d += ` C ${c1.px} ${c1.py}, ${c2.px} ${c2.py}, ${end.px} ${end.py}`
-          }
-          return d
-        })()
-      : curveSamples.length >= 2
-        ? curveSamples
-            .map((p, i) => {
-              const { px, py } = toPixel(p.xCm, p.yLb)
-              return `${i === 0 ? 'M' : 'L'} ${px} ${py}`
-            })
-            .join(' ')
-        : ''
+  const drawnSeries = useMemo(
+    () =>
+      series.map((s) => {
+        const sSorted = sortedPoints(s.points)
+        const samples = sampleForceCurve(sSorted, curveMode)
+        const sBeziers = curveMode === 'spline' ? forceCurveBeziers(sSorted) : []
+        return {
+          id: s.id,
+          name: s.name,
+          color: s.color,
+          active: s.id === activeId,
+          pathD: curvePathD(sSorted, samples, sBeziers, curveMode, toPixel),
+          knots: sSorted,
+          points: s.points,
+        }
+      }),
+    [series, activeId, curveMode, toPixel],
+  )
 
   const linearGhostD =
     curveMode === 'spline' && sorted.length >= 2
@@ -214,27 +231,18 @@ export function ForceChart({
       : ''
 
   const areaD =
-    curveSamples.length >= 2
+    curveSamples.length >= 2 && pathD
       ? (() => {
           const first = toPixel(curveSamples[0].xCm, range.yMin)
           const last = toPixel(curveSamples[curveSamples.length - 1].xCm, range.yMin)
-          const curve =
-            curveMode === 'spline' && pathD
-              ? pathD
-              : curveSamples
-                  .map((p, i) => {
-                    const { px, py } = toPixel(p.xCm, p.yLb)
-                    return `${i === 0 ? 'M' : 'L'} ${px} ${py}`
-                  })
-                  .join(' ')
-          return `${curve} L ${last.px} ${last.py} L ${first.px} ${first.py} Z`
+          return `${pathD} L ${last.px} ${last.py} L ${first.px} ${first.py} Z`
         })()
       : ''
 
   const xTicks = niceTicks(
     cmToDisplay(range.xMin, unitSystem),
     cmToDisplay(range.xMax, unitSystem),
-    8,
+    12,
   ).map((display) => ({
     cm: displayToCm(display, unitSystem),
     label: display,
@@ -265,6 +273,42 @@ export function ForceChart({
     publishProbe(probeCurveAt(sorted, xCm, curveMode))
   }
 
+  function findSeriesNearClick(clientX: number, clientY: number): string | null {
+    const { xCm } = toData(clientX, clientY, false)
+    const { py } = clientToPixel(clientX, clientY)
+    let best: { id: string; dist: number } | null = null
+
+    for (const s of series) {
+      const sSorted = sortedPoints(s.points)
+      if (sSorted.length < 2) {
+        for (const p of sSorted) {
+          const pt = toPixel(p.xCm, p.yLb)
+          const dist = Math.hypot(pt.px - clientToPixel(clientX, clientY).px, pt.py - py)
+          if (dist <= CURVE_HIT_PX && (!best || dist < best.dist)) {
+            best = { id: s.id, dist }
+          }
+        }
+        continue
+      }
+      if (xCm < sSorted[0].xCm || xCm > sSorted[sSorted.length - 1].xCm) continue
+      const probed = probeCurveAt(sSorted, xCm, curveMode)
+      if (!probed) continue
+      const curvePy = toPixel(probed.xCm, probed.yLb).py
+      const dist = Math.abs(curvePy - py)
+      if (dist <= CURVE_HIT_PX && (!best || dist < best.dist)) {
+        best = { id: s.id, dist }
+      }
+    }
+    return best?.id ?? null
+  }
+
+  function seriesIdForPoint(pointId: string): string | null {
+    for (const s of series) {
+      if (s.points.some((p) => p.id === pointId)) return s.id
+    }
+    return null
+  }
+
   function beginInteract(e: ReactPointerEvent) {
     e.preventDefault()
     window.getSelection()?.removeAllRanges()
@@ -287,7 +331,6 @@ export function ForceChart({
       target.getAttribute('data-point-id') ??
       target.closest('[data-point-id]')?.getAttribute('data-point-id')
 
-    // 中键 / Alt+左键：平移视图
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
       panRef.current = {
         startX: e.clientX,
@@ -301,18 +344,31 @@ export function ForceChart({
 
     if (e.button !== 0) return
 
+    // 点到其它曲线的测点：先选中该曲线
     if (pointId) {
-      const now = performance.now()
-      const prev = lastPointClick.current
-      if (prev && prev.id === pointId && now - prev.at <= DBL_MS) {
-        lastPointClick.current = null
-        endInteract()
-        onChange(pointsRef.current.filter((p) => p.id !== pointId))
+      const owner = seriesIdForPoint(pointId)
+      if (owner && owner !== activeId) {
+        onSelectSeries(owner)
         onSelect(null)
-        e.preventDefault()
         return
       }
-      lastPointClick.current = { id: pointId, at: now }
+    }
+
+    if (!editMode) {
+      panRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        range: { ...rangeRef.current },
+      }
+      setIsPanning(true)
+      onSelect(null)
+      beginInteract(e)
+      return
+    }
+
+    if (!activeId) return
+
+    if (pointId) {
       dragId.current = pointId
       dragOrigin.current = { x: e.clientX, y: e.clientY }
       dragging.current = false
@@ -321,7 +377,6 @@ export function ForceChart({
       return
     }
 
-    lastPointClick.current = null
     const { xCm, yLb } = toData(e.clientX, e.clientY)
     const r = rangeRef.current
     if (xCm < r.xMin || xCm > r.xMax || yLb < r.yMin || yLb > r.yMax) {
@@ -377,7 +432,6 @@ export function ForceChart({
       const dy = e.clientY - dragOrigin.current.y
       if (dx * dx + dy * dy < 36) return
       dragging.current = true
-      lastPointClick.current = null
     }
 
     onChange(
@@ -399,6 +453,35 @@ export function ForceChart({
     e.preventDefault()
   }
 
+  function onDoubleClick(e: ReactMouseEvent) {
+    e.preventDefault()
+    const target = e.target as Element
+    const pointId =
+      target.getAttribute('data-point-id') ??
+      target.closest('[data-point-id]')?.getAttribute('data-point-id')
+
+    if (pointId) {
+      const owner = seriesIdForPoint(pointId)
+      if (owner && owner !== activeId) {
+        onSelectSeries(owner)
+        onSelect(null)
+        return
+      }
+      // 编辑模式下双击当前曲线测点 → 删除
+      if (editMode && owner === activeId) {
+        onChange(pointsRef.current.filter((p) => p.id !== pointId))
+        onSelect(null)
+        return
+      }
+    }
+
+    const hit = findSeriesNearClick(e.clientX, e.clientY)
+    if (hit) {
+      onSelectSeries(hit)
+      onSelect(null)
+    }
+  }
+
   const triangle =
     probe && sorted.length >= 2
       ? {
@@ -417,10 +500,13 @@ export function ForceChart({
         }
       : null
 
+  const inactiveSeries = drawnSeries.filter((s) => !s.active)
+  const activeDrawn = drawnSeries.find((s) => s.active)
+
   return (
     <svg
       ref={svgRef}
-      className={`force-chart${isPanning ? ' is-panning' : ''}`}
+      className={`force-chart${isPanning ? ' is-panning' : ''}${editMode ? ' is-editing' : ''}`}
       viewBox={`0 0 ${size.w} ${size.h}`}
       preserveAspectRatio="none"
       onPointerDown={onPointerDown}
@@ -428,17 +514,22 @@ export function ForceChart({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onPointerLeave={onPointerLeave}
+      onDoubleClick={onDoubleClick}
       onDragStart={onDragStart}
       role="img"
-      aria-label="拉力曲线图，滚轮缩放，Alt 拖拽或中键平移，点击添加测点"
+      aria-label={
+        editMode
+          ? '编辑模式：点击添加测点，拖拽调整，双击曲线切换，双击测点删除'
+          : '浏览模式：拖拽平移，双击曲线切换当前曲线'
+      }
     >
       <defs>
         <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
           <path d="M 24 0 L 0 0 0 24" fill="none" stroke="var(--grid)" strokeWidth="1" />
         </pattern>
         <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.04" />
+          <stop offset="0%" stopColor={activeColor} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={activeColor} stopOpacity="0.04" />
         </linearGradient>
       </defs>
 
@@ -525,6 +616,39 @@ export function ForceChart({
         拉距 ({lengthLabel(unitSystem)})
       </text>
 
+      {inactiveSeries.map((s) =>
+        s.pathD ? (
+          <g key={s.id} pointerEvents="none">
+            <path
+              d={s.pathD}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity={0.75}
+            />
+            {s.knots.map((p) => {
+              const { px, py } = toPixel(p.xCm, p.yLb)
+              return (
+                <circle
+                  key={p.id}
+                  data-point-id={p.id}
+                  data-series-id={s.id}
+                  cx={px}
+                  cy={py}
+                  r={2.8}
+                  fill={s.color}
+                  stroke="none"
+                  opacity={0.85}
+                  style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                />
+              )
+            })}
+          </g>
+        ) : null,
+      )}
+
       {areaD && <path d={areaD} fill="url(#areaFill)" pointerEvents="none" />}
       {linearGhostD && (
         <path
@@ -537,12 +661,12 @@ export function ForceChart({
           pointerEvents="none"
         />
       )}
-      {pathD && (
+      {activeDrawn?.pathD && (
         <path
-          d={pathD}
+          d={activeDrawn.pathD}
           fill="none"
-          stroke="var(--accent)"
-          strokeWidth={2.5}
+          stroke={activeDrawn.color}
+          strokeWidth={2.8}
           strokeLinejoin="round"
           strokeLinecap="round"
           pointerEvents="none"
@@ -572,10 +696,10 @@ export function ForceChart({
           <circle
             cx={triangle.onCurve.px}
             cy={triangle.onCurve.py}
-            r={6}
+            r={3}
             fill="var(--focus)"
             stroke="var(--chart-bg)"
-            strokeWidth={2}
+            strokeWidth={1}
           />
         </g>
       )}
@@ -584,16 +708,22 @@ export function ForceChart({
         const { px, py } = toPixel(p.xCm, p.yLb)
         const selected = p.id === selectedId
         return (
-          <g key={p.id} data-point-id={p.id} style={{ cursor: 'grab' }}>
-            <circle data-point-id={p.id} cx={px} cy={py} r={14} fill="transparent" />
+          <g
+            key={p.id}
+            data-point-id={p.id}
+            data-series-id={activeId ?? undefined}
+            style={{ cursor: editMode ? 'grab' : 'pointer', pointerEvents: 'auto' }}
+          >
+            {editMode && (
+              <circle data-point-id={p.id} cx={px} cy={py} r={8} fill="transparent" />
+            )}
             <circle
               data-point-id={p.id}
               cx={px}
               cy={py}
-              r={selected ? 7 : 5.5}
-              fill={selected ? 'var(--accent)' : 'var(--chart-bg)'}
-              stroke="var(--accent)"
-              strokeWidth={2.2}
+              r={selected ? 5 : 3.6}
+              fill={activeColor}
+              stroke="none"
             />
           </g>
         )
@@ -627,6 +757,43 @@ export function ForceChart({
       )}
     </svg>
   )
+}
+
+function curvePathD(
+  sorted: ForcePoint[],
+  samples: { xCm: number; yLb: number }[],
+  beziers: ReturnType<typeof forceCurveBeziers>,
+  curveMode: CurveMode,
+  toPixel: (xCm: number, yLb: number) => { px: number; py: number },
+): string {
+  if (curveMode === 'spline' && beziers.length > 0) {
+    const first = toPixel(beziers[0].x0, beziers[0].y0)
+    let d = `M ${first.px} ${first.py}`
+    for (const s of beziers) {
+      const c1 = toPixel(s.x1, s.y1)
+      const c2 = toPixel(s.x2, s.y2)
+      const end = toPixel(s.x3, s.y3)
+      d += ` C ${c1.px} ${c1.py}, ${c2.px} ${c2.py}, ${end.px} ${end.py}`
+    }
+    return d
+  }
+  if (samples.length >= 2) {
+    return samples
+      .map((p, i) => {
+        const { px, py } = toPixel(p.xCm, p.yLb)
+        return `${i === 0 ? 'M' : 'L'} ${px} ${py}`
+      })
+      .join(' ')
+  }
+  if (sorted.length >= 2) {
+    return sorted
+      .map((p, i) => {
+        const { px, py } = toPixel(p.xCm, p.yLb)
+        return `${i === 0 ? 'M' : 'L'} ${px} ${py}`
+      })
+      .join(' ')
+  }
+  return ''
 }
 
 function niceTicks(min: number, max: number, count: number): number[] {

@@ -6,6 +6,17 @@ export type ForcePoint = {
   yLb: number
 }
 
+/** One named curve on the chart (import / sample / manual) */
+export type CurveSeries = {
+  id: string
+  name: string
+  color: string
+  points: ForcePoint[]
+}
+
+/** @deprecated use CurveSeries */
+export type CurveOverlay = CurveSeries
+
 export type AxisRange = {
   xMin: number
   xMax: number

@@ -1,10 +1,13 @@
-/** Natural cubic spline for F(x), x strictly increasing. */
+/**
+ * Akima cubic Hermite spline for F(x), x strictly increasing.
+ * Local: editing/adding a knot only reshapes nearby segments (not the whole curve).
+ */
 
 export type Spline = {
   xs: number[]
   ys: number[]
-  /** Second derivatives at knots (Natural BC: y2[0]=y2[n-1]=0) */
-  y2: number[]
+  /** First derivatives dy/dx at knots */
+  m: number[]
 }
 
 export type SamplePoint = {
@@ -27,39 +30,58 @@ export function uniqueByX(xs: number[], ys: number[]): { xs: number[]; ys: numbe
   return { xs: outX, ys: outY }
 }
 
-export function buildNaturalCubicSpline(xsIn: number[], ysIn: number[]): Spline | null {
+/**
+ * Akima slope at knots. Each segment depends only on a few neighboring slopes,
+ * so inserting a point between A–B mainly changes the neighborhood of A–B.
+ */
+export function buildAkimaSpline(xsIn: number[], ysIn: number[]): Spline | null {
   const { xs, ys } = uniqueByX(xsIn, ysIn)
   const n = xs.length
   if (n < 2) return null
 
-  const y2 = new Array<number>(n).fill(0)
-  if (n === 2) return { xs, ys, y2 }
+  if (n === 2) {
+    const slope = (ys[1] - ys[0]) / (xs[1] - xs[0])
+    return { xs, ys, m: [slope, slope] }
+  }
 
-  const u = new Array<number>(n).fill(0)
-  for (let i = 1; i < n - 1; i++) {
-    const sig = (xs[i] - xs[i - 1]) / (xs[i + 1] - xs[i - 1])
-    const p = sig * y2[i - 1] + 2
-    y2[i] = (sig - 1) / p
-    u[i] =
-      (6 *
-        ((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]) -
-          (ys[i] - ys[i - 1]) / (xs[i] - xs[i - 1])) /
-        (xs[i + 1] - xs[i - 1]) -
-        sig * u[i - 1]) /
-      p
+  // Interval slopes s[0..n-2]
+  const s: number[] = []
+  for (let i = 0; i < n - 1; i++) {
+    const h = xs[i + 1] - xs[i]
+    s.push(h <= 1e-12 ? 0 : (ys[i + 1] - ys[i]) / h)
   }
-  for (let k = n - 2; k >= 0; k--) {
-    y2[k] = y2[k] * y2[k + 1] + u[k]
+
+  // Extrapolate two slopes on each end (classic Akima)
+  const sL1 = 2 * s[0] - s[1]
+  const sL2 = 2 * sL1 - s[0]
+  const sR1 = 2 * s[n - 2] - s[n - 3]
+  const sR2 = 2 * sR1 - s[n - 2]
+  const S = [sL2, sL1, ...s, sR1, sR2]
+
+  // S indexed so S[k] corresponds to extrapolated + real; knot i uses S[i]..S[i+3]
+  // S = [s_{-2}, s_{-1}, s_0, ..., s_{n-2}, s_{n-1}, s_n]
+  // For knot i, weights from |S[i+3]-S[i+2]| and |S[i+1]-S[i]|
+  const m = new Array<number>(n)
+  for (let i = 0; i < n; i++) {
+    const d1 = Math.abs(S[i + 3] - S[i + 2])
+    const d2 = Math.abs(S[i + 1] - S[i])
+    if (d1 + d2 < 1e-12) {
+      m[i] = 0.5 * (S[i + 1] + S[i + 2])
+    } else {
+      m[i] = (d1 * S[i + 1] + d2 * S[i + 2]) / (d1 + d2)
+    }
   }
-  return { xs, ys, y2 }
+
+  return { xs, ys, m }
 }
 
-export function evalSpline(spline: Spline, x: number): number {
-  const { xs, ys, y2 } = spline
-  const n = xs.length
-  if (x <= xs[0]) return ys[0]
-  if (x >= xs[n - 1]) return ys[n - 1]
+/** @deprecated alias — kept so older imports keep working */
+export const buildNaturalCubicSpline = buildAkimaSpline
 
+function findSegment(xs: number[], x: number): { lo: number; hi: number } {
+  const n = xs.length
+  if (x <= xs[0]) return { lo: 0, hi: 1 }
+  if (x >= xs[n - 1]) return { lo: n - 2, hi: n - 1 }
   let lo = 0
   let hi = n - 1
   while (hi - lo > 1) {
@@ -67,48 +89,51 @@ export function evalSpline(spline: Spline, x: number): number {
     if (xs[mid] > x) hi = mid
     else lo = mid
   }
-
-  const h = xs[hi] - xs[lo]
-  if (h <= 1e-12) return ys[lo]
-  const a = (xs[hi] - x) / h
-  const b = (x - xs[lo]) / h
-  return (
-    a * ys[lo] +
-    b * ys[hi] +
-    ((a * a * a - a) * y2[lo] + (b * b * b - b) * y2[hi]) * (h * h) / 6
-  )
+  return { lo, hi }
 }
 
-/** First derivative dy/dx on the spline (at endpoints uses adjacent segment). */
+export function evalSpline(spline: Spline, x: number): number {
+  const { xs, ys, m } = spline
+  const n = xs.length
+  if (x <= xs[0]) return ys[0]
+  if (x >= xs[n - 1]) return ys[n - 1]
+
+  const { lo, hi } = findSegment(xs, x)
+  const h = xs[hi] - xs[lo]
+  if (h <= 1e-12) return ys[lo]
+
+  const t = (x - xs[lo]) / h
+  const t2 = t * t
+  const t3 = t2 * t
+  const h00 = 2 * t3 - 3 * t2 + 1
+  const h10 = t3 - 2 * t2 + t
+  const h01 = -2 * t3 + 3 * t2
+  const h11 = t3 - t2
+  return h00 * ys[lo] + h10 * h * m[lo] + h01 * ys[hi] + h11 * h * m[hi]
+}
+
+/** First derivative dy/dx on the spline. */
 export function evalSplineDerivative(spline: Spline, x: number): number {
-  const { xs, ys, y2 } = spline
+  const { xs, ys, m } = spline
   const n = xs.length
   if (n < 2) return 0
 
-  let lo = 0
-  let hi = n - 1
-  if (x <= xs[0]) {
-    lo = 0
-    hi = 1
-  } else if (x >= xs[n - 1]) {
-    lo = n - 2
-    hi = n - 1
-  } else {
-    while (hi - lo > 1) {
-      const mid = (hi + lo) >> 1
-      if (xs[mid] > x) hi = mid
-      else lo = mid
-    }
-  }
-
+  const { lo, hi } = findSegment(xs, x)
   const h = xs[hi] - xs[lo]
   if (h <= 1e-12) return 0
-  const a = (xs[hi] - x) / h
-  const b = (x - xs[lo]) / h
-  return (
-    (ys[hi] - ys[lo]) / h +
-    ((1 - 3 * a * a) * y2[lo] + (3 * b * b - 1) * y2[hi]) * h / 6
-  )
+
+  // Clamp t into [0,1] for endpoint derivative queries
+  let t = (x - xs[lo]) / h
+  if (x <= xs[0]) t = 0
+  if (x >= xs[n - 1]) t = 1
+
+  const t2 = t * t
+  // d/dt of Hermite basis, then / h for d/dx
+  const dh00 = 6 * t2 - 6 * t
+  const dh10 = 3 * t2 - 4 * t + 1
+  const dh01 = -6 * t2 + 6 * t
+  const dh11 = 3 * t2 - 2 * t
+  return (dh00 * ys[lo] + dh10 * h * m[lo] + dh01 * ys[hi] + dh11 * h * m[hi]) / h
 }
 
 export type BezierSegment = {
@@ -124,7 +149,7 @@ export type BezierSegment = {
 
 /** Convert each spline span to a cubic Bezier in (x,y) for SVG drawing. */
 export function splineToBezierSegments(spline: Spline): BezierSegment[] {
-  const { xs, ys } = spline
+  const { xs, ys, m } = spline
   const segs: BezierSegment[] = []
   for (let i = 0; i < xs.length - 1; i++) {
     const x0 = xs[i]
@@ -133,8 +158,8 @@ export function splineToBezierSegments(spline: Spline): BezierSegment[] {
     if (h <= 1e-12) continue
     const y0 = ys[i]
     const y3 = ys[i + 1]
-    const d0 = evalSplineDerivative(spline, x0)
-    const d3 = evalSplineDerivative(spline, x3)
+    const d0 = m[i]
+    const d3 = m[i + 1]
     segs.push({
       x0,
       y0,

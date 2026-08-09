@@ -1,6 +1,6 @@
 import type { CurveProbe, EnergyResult, ForcePoint } from './types'
 import {
-  buildNaturalCubicSpline,
+  buildAkimaSpline,
   evalSpline,
   sampleSpline,
   splineToBezierSegments,
@@ -22,7 +22,7 @@ function sortedPoints(points: ForcePoint[]): ForcePoint[] {
 export function buildCurveSpline(points: ForcePoint[]): Spline | null {
   const sorted = sortedPoints(points)
   if (sorted.length < 2) return null
-  return buildNaturalCubicSpline(
+  return buildAkimaSpline(
     sorted.map((p) => p.xCm),
     sorted.map((p) => p.yLb),
   )
