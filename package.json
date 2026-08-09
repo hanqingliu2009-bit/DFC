@@ -2,7 +2,7 @@
   "name": "dfc",
   "productName": "DFC拉力曲线",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.1",
   "description": "拉力曲线绘制与蓄能计算工具",
   "author": "DFC",
   "type": "module",
@@ -16,7 +16,8 @@
     "pack": "npm run build && electron-builder --win dir --x64 && node scripts/zip-green.mjs",
     "pack:portable": "npm run build && electron-builder --win portable --x64",
     "pack:dir": "npm run build && electron-builder --win dir --x64",
-    "pack:zip": "npm run pack"
+    "pack:zip": "npm run pack",
+    "zip": "node scripts/zip-green.mjs"
   },
   "build": {
     "appId": "com.dfc.drawforcecurve",

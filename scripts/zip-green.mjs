@@ -1,12 +1,29 @@
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(readFileSync(path.join(__dirname, '../package.json'), 'utf8'))
+const version = pkg.version || '1.0.0'
 
 const releaseRoot = 'D:/dev/DFC-release'
 const unpacked = path.join(releaseRoot, 'win-unpacked')
 const stageName = 'DFC拉力曲线'
 const staged = path.join(releaseRoot, stageName)
-const outZip = path.join(releaseRoot, 'DFC拉力曲线-1.0.0-绿色版.zip')
+
+/** Usage: node scripts/zip-green.mjs [zipName]  or  ZIP_NAME=xxx node scripts/zip-green.mjs */
+function resolveZipName() {
+  const fromArg = process.argv.slice(2).find((a) => a && !a.startsWith('-'))
+  const fromEnv = process.env.ZIP_NAME?.trim()
+  let name = (fromArg || fromEnv || `DFC拉力曲线-${version}-绿色版`).trim()
+  name = name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+  if (!name.toLowerCase().endsWith('.zip')) name += '.zip'
+  return name
+}
+
+const zipFileName = resolveZipName()
+const outZip = path.join(releaseRoot, zipFileName)
 
 if (!existsSync(unpacked)) {
   console.error('missing win-unpacked, run electron-builder --win dir first')
@@ -37,5 +54,6 @@ execFileSync(
   { stdio: 'inherit' },
 )
 
+console.log(`zip 文件名：${zipFileName}`)
 console.log('客户：解压 zip → 打开「DFC拉力曲线」文件夹 → 双击「DFC拉力曲线.exe」')
 console.log('该 exe 图标与 win-unpacked 内一致（弓箭图标）')

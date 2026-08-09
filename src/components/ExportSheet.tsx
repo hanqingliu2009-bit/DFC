@@ -56,8 +56,8 @@ export function ExportSheet({
     >
       <header className="export-sheet-head">
         <div>
-          <p className="export-sheet-brand">DFC</p>
-          <h1>{n >= 2 ? '拉力曲线对比' : '拉力曲线'}</h1>
+          <p className="export-sheet-brand">拉力曲线</p>
+          <h1>{n >= 2 ? '分析计算工具 · 对比' : '分析计算工具'}</h1>
         </div>
         <div className="export-sheet-meta">
           <span>{unitSystem === 'metric' ? '公制 · cm / kg' : '英制 · in / Lb'}</span>

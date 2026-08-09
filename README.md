@@ -73,13 +73,18 @@ npm run dev:electron   # Electron 桌面窗口
 
 ```bash
 npm run pack
+# 自定义 zip 文件名（可省略 .zip）
+npm run pack -- 拉力曲线-客户A
+# 或只打 zip（需已有 win-unpacked）
+npm run zip -- 拉力曲线-客户A
+# 环境变量亦可：set ZIP_NAME=拉力曲线-客户A&& npm run pack
 ```
 
 产物目录：`D:\dev\DFC-release\`
 
 | 路径 | 说明 |
 |------|------|
-| `DFC拉力曲线-1.0.0-绿色版.zip` | **发给客户**（免安装） |
+| `DFC拉力曲线-<version>-绿色版.zip` | 默认 zip 名（可用参数覆盖） |
 | `win-unpacked\` | 解压后的完整程序（打包中间产物） |
 
 **客户用法：** 解压 zip → 打开 `DFC拉力曲线` 文件夹 → 双击 `DFC拉力曲线.exe`。

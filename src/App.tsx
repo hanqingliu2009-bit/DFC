@@ -37,6 +37,11 @@ function makeSeries(name: string, points: ForcePoint[], colorIndex: number): Cur
   }
 }
 
+/** Always keep at least one editable curve so points can be entered from scratch. */
+function blankSeries(colorIndex = 0): CurveSeries {
+  return makeSeries('未命名曲线', [], colorIndex)
+}
+
 function initialSeries(): CurveSeries[] {
   return [makeSeries('示例曲线', sampleCurve(), 0)]
 }
@@ -349,8 +354,11 @@ export default function App() {
   async function onImportFiles(files: FileList | File[]) {
     const list = Array.from(files)
     if (!list.length) return
+    const onlyBlank =
+      series.length === 1 && series[0].points.length === 0
+    const base = onlyBlank ? [] : series
     const added: CurveSeries[] = []
-    let colorIndex = series.length
+    let colorIndex = base.length
     for (const file of list) {
       const text = await readFileAsText(file)
       const pts = parseCsv(text)
@@ -361,7 +369,7 @@ export default function App() {
       window.alert('所选文件中没有可解析的测点。')
       return
     }
-    const next = [...series, ...added]
+    const next = [...base, ...added]
     setSeries(next)
     setActiveId(added[added.length - 1].id)
     setSelectedId(null)
@@ -369,13 +377,42 @@ export default function App() {
   }
 
   function removeSeries(id: string) {
-    const next = series.filter((s) => s.id !== id)
+    let next = series.filter((s) => s.id !== id)
+    if (next.length === 0) {
+      const blank = blankSeries(0)
+      next = [blank]
+      setSeries(next)
+      setActiveId(blank.id)
+      setSelectedId(null)
+      setProbe(null)
+      setRange(DEFAULT_RANGE)
+      return
+    }
     setSeries(next)
     if (activeId === id) {
-      setActiveId(next[next.length - 1]?.id ?? null)
+      setActiveId(next[next.length - 1].id)
       setSelectedId(null)
+      setProbe(null)
     }
     fitAll(next)
+  }
+
+  function resetToBlankSeries() {
+    const blank = blankSeries(0)
+    setSeries([blank])
+    setActiveId(blank.id)
+    setSelectedId(null)
+    setProbe(null)
+    setRange(DEFAULT_RANGE)
+  }
+
+  function addBlankSeries() {
+    const s = blankSeries(series.length)
+    const next = [...series, s]
+    setSeries(next)
+    setActiveId(s.id)
+    setSelectedId(null)
+    setProbe(null)
   }
 
   function setRangeDisplay(key: keyof AxisRange, displayValue: number) {
@@ -420,8 +457,8 @@ export default function App() {
       <header className="hero">
         <div className="hero-top">
           <div>
-            <p className="brand">DFC</p>
-            <h1>拉力曲线</h1>
+            <p className="brand">拉力曲线</p>
+            <h1>分析计算工具</h1>
           </div>
           <div className="unit-switch" role="group" aria-label="单位制">
             <button
@@ -505,7 +542,7 @@ export default function App() {
 
           <div className="export-bundle">
             <div className="export-head">
-              <span className="export-brand">DFC 拉力曲线</span>
+              <span className="export-brand">拉力曲线 · 分析计算工具</span>
               <span className="export-meta">
                 {unitSystem === 'metric' ? '公制 cm / kg' : '英制 in / Lb'}
                 {' · '}
@@ -604,8 +641,12 @@ export default function App() {
           <section className="controls" aria-label="操作">
             <h2>操作</h2>
             <div className="btn-row">
+              <button type="button" onClick={addBlankSeries}>
+                新建曲线
+              </button>
               <button
                 type="button"
+                className="ghost"
                 onClick={() => {
                   const s = makeSeries('示例曲线', sampleCurve(), series.length)
                   const next = [...series, s]
@@ -620,7 +661,6 @@ export default function App() {
               <button
                 type="button"
                 className="ghost"
-                disabled={!activeId}
                 onClick={() => {
                   if (activeId) removeSeries(activeId)
                 }}
@@ -637,7 +677,7 @@ export default function App() {
                 type="button"
                 className="ghost"
                 onClick={() => void exportImage()}
-                disabled={exporting || !series.length}
+                disabled={exporting || !series.some((s) => s.points.length > 0)}
               >
                 {exporting ? '导出中…' : '导出图片'}
               </button>
@@ -654,7 +694,7 @@ export default function App() {
               />
             </div>
             <p className="import-hint">
-              导入按文件名命名并叠加到图上（可多选）；双击图上曲线即可切换当前编辑对象。
+              可从空白曲线手动画点，画完后「导出 CSV」保存当前曲线；导入按文件名叠加（可多选）。
             </p>
 
             {series.length > 0 && (
@@ -664,12 +704,7 @@ export default function App() {
                   <button
                     type="button"
                     className="ghost linkish"
-                    onClick={() => {
-                      setSeries([])
-                      setActiveId(null)
-                      setSelectedId(null)
-                      setRange(DEFAULT_RANGE)
-                    }}
+                    onClick={resetToBlankSeries}
                   >
                     全部清除
                   </button>
@@ -734,7 +769,6 @@ export default function App() {
                 value={draftX}
                 onChange={(e) => setDraftX(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addPoint()}
-                disabled={!activeId}
               />
               <input
                 type="number"
@@ -742,9 +776,8 @@ export default function App() {
                 value={draftY}
                 onChange={(e) => setDraftY(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && addPoint()}
-                disabled={!activeId}
               />
-              <button type="button" onClick={addPoint} disabled={!activeId}>
+              <button type="button" onClick={addPoint}>
                 添加
               </button>
             </div>
