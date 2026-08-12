@@ -1,6 +1,10 @@
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { toPng } from 'html-to-image'
+import {
+  ArrowExportSheet,
+  type ArrowExportRow,
+} from '../components/ArrowExportSheet'
 import { ExportSheet, type SeriesEnergyRow } from '../components/ExportSheet'
 import type { CurveMode } from './energy'
 import type { AxisRange, CurveSeries } from './types'
@@ -16,18 +20,28 @@ export type ExportImageInput = {
   chartSize: { w: number; h: number }
 }
 
+export type ArrowExportImageInput = {
+  rows: ArrowExportRow[]
+  series: CurveSeries[]
+  unitSystem: UnitSystem
+  curveMode: CurveMode
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
 async function waitForPaint() {
-  await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+  await new Promise<void>((r) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => r())),
+  )
 }
 
-/** Render a dedicated export layout off-screen, capture PNG, then tear down. */
-export async function downloadExportPng(
-  input: ExportImageInput,
-  filename = 'dfc-拉力曲线.png',
+async function captureNodePng(
+  selector: string,
+  render: (root: Root) => void,
+  filename: string,
+  waitMs = 80,
 ): Promise<void> {
   const host = document.createElement('div')
   host.setAttribute('aria-hidden', 'true')
@@ -37,24 +51,13 @@ export async function downloadExportPng(
 
   let root: Root | null = createRoot(host)
   try {
-    root.render(
-      createElement(ExportSheet, {
-        series: input.series,
-        rows: input.rows,
-        range: input.range,
-        unitSystem: input.unitSystem,
-        curveMode: input.curveMode,
-        chartSize: input.chartSize,
-      }),
-    )
-
+    render(root)
     await document.fonts.ready.catch(() => undefined)
     await waitForPaint()
-    // ForceChart sizes via ResizeObserver — give it a beat
-    await sleep(120)
+    await sleep(waitMs)
     await waitForPaint()
 
-    const sheet = host.querySelector('.export-sheet') as HTMLElement | null
+    const sheet = host.querySelector(selector) as HTMLElement | null
     if (!sheet) throw new Error('export sheet missing')
 
     const bg =
@@ -68,7 +71,6 @@ export async function downloadExportPng(
       width: sheet.scrollWidth,
       height: sheet.scrollHeight,
       style: {
-        // ensure full tall layout is captured (no viewport clip)
         transform: 'none',
         margin: '0',
       },
@@ -83,6 +85,52 @@ export async function downloadExportPng(
     root = null
     host.remove()
   }
+}
+
+/** Render a dedicated export layout off-screen, capture PNG, then tear down. */
+export async function downloadExportPng(
+  input: ExportImageInput,
+  filename = 'dfc-拉力曲线.png',
+): Promise<void> {
+  await captureNodePng(
+    '.export-sheet',
+    (root) => {
+      root.render(
+        createElement(ExportSheet, {
+          series: input.series,
+          rows: input.rows,
+          range: input.range,
+          unitSystem: input.unitSystem,
+          curveMode: input.curveMode,
+          chartSize: input.chartSize,
+        }),
+      )
+    },
+    filename,
+    120,
+  )
+}
+
+/** Portrait PNG for arrow kinetic energy results. */
+export async function downloadArrowExportPng(
+  input: ArrowExportImageInput,
+  filename = 'dfc-箭动能.png',
+): Promise<void> {
+  await captureNodePng(
+    '.arrow-export-sheet',
+    (root) => {
+      root.render(
+        createElement(ArrowExportSheet, {
+          rows: input.rows,
+          series: input.series,
+          unitSystem: input.unitSystem,
+          curveMode: input.curveMode,
+        }),
+      )
+    },
+    filename,
+    60,
+  )
 }
 
 /** @deprecated prefer downloadExportPng */

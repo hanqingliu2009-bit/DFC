@@ -56,7 +56,7 @@ export function ExportSheet({
     >
       <header className="export-sheet-head">
         <div>
-          <p className="export-sheet-brand">拉力曲线</p>
+          <p className="export-sheet-brand">弓箭性能</p>
           <h1>{n >= 2 ? '分析计算工具 · 对比' : '分析计算工具'}</h1>
         </div>
         <div className="export-sheet-meta">

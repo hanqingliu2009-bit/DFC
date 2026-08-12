@@ -11,7 +11,7 @@ function createWindow() {
     height: 840,
     minWidth: 900,
     minHeight: 640,
-    title: 'DFC · 拉力曲线',
+    title: '弓箭性能分析计算工具',
     icon: path.join(__dirname, 'icon.ico'),
     show: false,
     autoHideMenuBar: true,

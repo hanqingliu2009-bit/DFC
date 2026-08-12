@@ -1,9 +1,9 @@
 {
   "name": "dfc",
-  "productName": "DFC拉力曲线",
+  "productName": "弓箭性能分析计算工具",
   "private": true,
-  "version": "1.1.1",
-  "description": "拉力曲线绘制与蓄能计算工具",
+  "version": "1.2.1",
+  "description": "弓箭性能分析与计算工具",
   "author": "DFC",
   "type": "module",
   "main": "electron/main.mjs",
@@ -21,7 +21,7 @@
   },
   "build": {
     "appId": "com.dfc.drawforcecurve",
-    "productName": "DFC拉力曲线",
+    "productName": "弓箭性能分析计算工具",
     "copyright": "Copyright © DFC",
     "directories": {
       "output": "D:/dev/DFC-release",

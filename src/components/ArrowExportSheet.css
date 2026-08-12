@@ -1,0 +1,178 @@
+.arrow-export-sheet {
+  box-sizing: border-box;
+  width: 720px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  border: 1px solid var(--stroke);
+}
+
+.arrow-export-sheet *,
+.arrow-export-sheet *::before,
+.arrow-export-sheet *::after {
+  box-sizing: border-box;
+}
+
+.arrow-export-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem 0.85rem;
+  border-bottom: 1px solid var(--stroke);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--chart-bg) 85%, #fff) 0%,
+    var(--panel) 100%
+  );
+}
+
+.arrow-export-brand {
+  margin: 0;
+  font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-weight: 800;
+  font-size: 1.75rem;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.arrow-export-head h1 {
+  margin: 0.25rem 0 0;
+  font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent-ink);
+}
+
+.arrow-export-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem 0.85rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+}
+
+.arrow-export-summary,
+.arrow-export-details {
+  padding: 0.9rem 1.25rem 0.35rem;
+}
+
+.arrow-export-summary h2,
+.arrow-export-details h2 {
+  margin: 0 0 0.65rem;
+  font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.arrow-export-summary table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  background: var(--chart-bg);
+  border: 1px solid var(--stroke);
+}
+
+.arrow-export-summary th,
+.arrow-export-summary td {
+  padding: 0.4rem 0.45rem;
+  text-align: left;
+  border-bottom: 1px solid var(--stroke);
+  vertical-align: middle;
+}
+
+.arrow-export-summary th {
+  background: #eef1f4;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.arrow-export-summary tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.arrow-export-summary td {
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+}
+
+.arrow-export-card {
+  border: 1px solid var(--stroke);
+  background: var(--chart-bg);
+  padding: 0.7rem 0.8rem 0.75rem;
+  margin-bottom: 0.65rem;
+  border-top: 3px solid var(--accent);
+}
+
+.arrow-export-card h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.arrow-export-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.arrow-export-card dl > div {
+  padding: 0.35rem 0.4rem;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+}
+
+.arrow-export-card dl > div.is-primary {
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--stroke));
+  background: color-mix(in srgb, var(--accent) 8%, var(--chart-bg));
+}
+
+.arrow-export-card dl > div.is-accent {
+  border-color: color-mix(in srgb, var(--focus) 45%, var(--stroke));
+  background: color-mix(in srgb, var(--focus) 8%, var(--chart-bg));
+}
+
+.arrow-export-card dt {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.arrow-export-card dd {
+  margin: 0.15rem 0 0;
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.arrow-export-card .is-primary dd {
+  font-size: 1.35rem;
+  color: var(--accent-ink);
+}
+
+.arrow-export-card .is-accent dd {
+  color: var(--focus);
+}
+
+.arrow-export-card dd small {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.arrow-export-foot {
+  padding: 0.65rem 1.25rem 0.9rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  border-top: 1px solid var(--stroke);
+  margin-top: 0.35rem;
+}

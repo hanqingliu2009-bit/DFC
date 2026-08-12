@@ -52,8 +52,16 @@
   color: var(--ink);
 }
 
+.hero-title-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.65rem;
+  margin-top: 0.35rem;
+}
+
 .hero h1 {
-  margin: 0.35rem 0 0;
+  margin: 0;
   font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
   font-weight: 700;
   font-size: clamp(1.35rem, 3vw, 1.75rem);
@@ -61,11 +69,280 @@
   color: var(--accent-ink);
 }
 
+.app-version {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  line-height: 1;
+}
+
 .lede {
   margin: 0.75rem 0 0;
   color: var(--muted);
   font-size: 1rem;
   max-width: 32rem;
+}
+
+.page-tabs {
+  display: flex;
+  gap: 0.15rem;
+  margin: 0 0 1.35rem;
+  padding: 0;
+  border: none;
+  border-bottom: 2px solid var(--stroke);
+  background: transparent;
+  width: 100%;
+  max-width: 40rem;
+}
+
+.page-tabs button {
+  position: relative;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.65rem 1.35rem 0.75rem;
+  font-size: 1.12rem;
+  font-weight: 700;
+  font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  letter-spacing: -0.02em;
+  margin-bottom: -2px;
+  border-bottom: 2px solid transparent;
+}
+
+.page-tabs button.is-active {
+  background: transparent;
+  color: var(--accent-ink);
+  border-bottom-color: var(--accent);
+}
+
+.page-tabs button:hover:not(.is-active) {
+  color: var(--ink);
+  background: transparent;
+  border-bottom-color: color-mix(in srgb, var(--accent) 35%, var(--stroke));
+}
+
+.arrow-panel {
+  max-width: 960px;
+}
+
+.arrow-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.arrow-panel-head h2 {
+  margin: 0;
+  font-family: 'Bahnschrift', 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.arrow-lede {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 36rem;
+}
+
+.arrow-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.arrow-panel-actions > button {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #f4f6f8;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.arrow-panel-actions > button.ghost {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--stroke);
+}
+
+.arrow-panel-actions > button:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.arrow-panel-actions > button.ghost:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.arrow-panel-actions > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.arrow-formula {
+  margin: 0 0 0.85rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+}
+
+.arrow-warn {
+  margin: 0 0 0.85rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--stroke);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  color: var(--accent-ink);
+  font-size: 0.85rem;
+}
+
+.arrow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.arrow-card {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  padding: 0.9rem 1rem 1rem;
+}
+
+.arrow-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.arrow-index {
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.arrow-name {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--stroke);
+  background: var(--chart-bg);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.arrow-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.arrow-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.arrow-fields label > span,
+.arrow-optional-title {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.arrow-input-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+
+.arrow-input-row input,
+.arrow-fields select,
+.arrow-fields input[type='number'] {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--stroke);
+  background: var(--chart-bg);
+  padding: 0.4rem 0.5rem;
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 0.9rem;
+}
+
+.arrow-input-row .unit-switch button {
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.arrow-result.primary {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  column-gap: 0.35rem;
+  align-items: end;
+  padding: 0.55rem 0.65rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--stroke));
+  background: color-mix(in srgb, var(--accent) 8%, var(--chart-bg));
+}
+
+.arrow-result .stat-value {
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 1.75rem;
+  font-weight: 500;
+  color: var(--accent-ink);
+  line-height: 1.1;
+}
+
+.arrow-optional {
+  border-top: 1px solid var(--stroke);
+  padding-top: 0.75rem;
+}
+
+.arrow-optional-title {
+  margin: 0 0 0.55rem;
+  font-weight: 600;
+}
+
+.arrow-extra-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.arrow-mini {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  column-gap: 0.3rem;
+  align-items: end;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--stroke);
+  background: var(--chart-bg);
+}
+
+.arrow-mini.accent {
+  border-color: color-mix(in srgb, var(--focus) 45%, var(--stroke));
+  background: color-mix(in srgb, var(--focus) 8%, var(--chart-bg));
+}
+
+.arrow-mini .stat-value.sm {
+  font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
+  font-size: 1.15rem;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.arrow-mini.accent .stat-value.sm {
+  color: var(--focus);
 }
 
 .layout {
@@ -673,6 +950,11 @@ table input {
   .chart-frame {
     height: 420px;
     min-height: 320px;
+  }
+
+  .arrow-fields,
+  .arrow-extra-grid {
+    grid-template-columns: 1fr;
   }
 }
 

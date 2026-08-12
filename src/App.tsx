@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
+import { ArrowEnergyPanel, createArrowRow, type ArrowRow } from './components/ArrowEnergyPanel'
+import { APP_VERSION } from './version'
 import { ForceChart } from './components/ForceChart'
 import { nextSeriesColor, seriesNameFromFile } from './lib/compare'
 import {
@@ -11,7 +13,7 @@ import {
   sortedPoints,
   type CurveMode,
 } from './lib/energy'
-import { downloadExportPng } from './lib/exportImage'
+import { downloadArrowExportPng, downloadExportPng } from './lib/exportImage'
 import type { AxisRange, CurveProbe, CurveSeries, EnergyResult, ForcePoint } from './lib/types'
 import {
   cmToDisplay,
@@ -225,6 +227,9 @@ export default function App() {
   const [curveMode, setCurveMode] = useState<CurveMode>('spline')
   const [editMode, setEditMode] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [pageTab, setPageTab] = useState<'curve' | 'arrow'>('curve')
+  const [arrowRows, setArrowRows] = useState<ArrowRow[]>(() => [createArrowRow()])
+  const [arrowExporting, setArrowExporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const chartFrameRef = useRef<HTMLDivElement>(null)
 
@@ -350,6 +355,27 @@ export default function App() {
     }
   }
 
+  async function exportArrowImage() {
+    if (arrowExporting || !arrowRows.length) return
+    setArrowExporting(true)
+    try {
+      await downloadArrowExportPng(
+        {
+          rows: arrowRows,
+          series,
+          unitSystem,
+          curveMode,
+        },
+        `dfc-箭动能-${new Date().toISOString().slice(0, 10)}.png`,
+      )
+    } catch (err) {
+      console.error(err)
+      window.alert('导出图片失败，请重试。')
+    } finally {
+      setArrowExporting(false)
+    }
+  }
+
   /** 导入始终叠加；曲线名 = 文件名；最后导入的成为当前曲线 */
   async function onImportFiles(files: FileList | File[]) {
     const list = Array.from(files)
@@ -439,6 +465,32 @@ export default function App() {
       const lb = displayToLb(n, unitSystem)
       return String(roundDisplay(lbToDisplay(lb, next), 4))
     })
+    setArrowRows((prev) =>
+      prev.map((row) => {
+        let nextRow = row
+        if (row.draw) {
+          const n = Number(row.draw)
+          if (Number.isFinite(n)) {
+            const cm = displayToCm(n, unitSystem)
+            nextRow = {
+              ...nextRow,
+              draw: String(roundDisplay(cmToDisplay(cm, next), 4)),
+            }
+          }
+        }
+        if (row.force) {
+          const n = Number(row.force)
+          if (Number.isFinite(n)) {
+            const lb = displayToLb(n, unitSystem)
+            nextRow = {
+              ...nextRow,
+              force: String(roundDisplay(lbToDisplay(lb, next), 4)),
+            }
+          }
+        }
+        return nextRow
+      }),
+    )
     setUnitSystem(next)
   }
 
@@ -457,8 +509,11 @@ export default function App() {
       <header className="hero">
         <div className="hero-top">
           <div>
-            <p className="brand">拉力曲线</p>
-            <h1>分析计算工具</h1>
+            <p className="brand">弓箭性能</p>
+            <div className="hero-title-row">
+              <h1>分析计算工具</h1>
+              <span className="app-version">v{APP_VERSION}</span>
+            </div>
           </div>
           <div className="unit-switch" role="group" aria-label="单位制">
             <button
@@ -478,11 +533,46 @@ export default function App() {
           </div>
         </div>
         <p className="lede">
-          导入 CSV 会按文件名添加曲线；再次导入叠加到同一张图。双击曲线可切换当前编辑对象。当前为
-          {unitSystem === 'metric' ? '公制（cm / kg）' : '英制（in / Lb）'}。
+          {pageTab === 'curve'
+            ? `导入 CSV 会按文件名添加曲线；再次导入叠加到同一张图。双击曲线可切换当前编辑对象。当前为${
+                unitSystem === 'metric' ? '公制（cm / kg）' : '英制（in / Lb）'
+              }。`
+            : '根据箭重与箭速计算动能；可选测速拉距 + 拉力曲线，得到测速拉力、每磅/每千克动能与效率。'}
         </p>
       </header>
 
+      <nav className="page-tabs" role="tablist" aria-label="功能页">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={pageTab === 'curve'}
+          className={pageTab === 'curve' ? 'is-active' : ''}
+          onClick={() => setPageTab('curve')}
+        >
+          拉力曲线
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={pageTab === 'arrow'}
+          className={pageTab === 'arrow' ? 'is-active' : ''}
+          onClick={() => setPageTab('arrow')}
+        >
+          箭动能
+        </button>
+      </nav>
+
+      {pageTab === 'arrow' ? (
+        <ArrowEnergyPanel
+          series={series}
+          unitSystem={unitSystem}
+          curveMode={curveMode}
+          rows={arrowRows}
+          onRowsChange={setArrowRows}
+          exporting={arrowExporting}
+          onExportImage={() => void exportArrowImage()}
+        />
+      ) : (
       <main className="layout">
         <section className="chart-panel" aria-label="拉力曲线图">
           <div className="chart-toolbar">
@@ -542,7 +632,7 @@ export default function App() {
 
           <div className="export-bundle">
             <div className="export-head">
-              <span className="export-brand">拉力曲线 · 分析计算工具</span>
+              <span className="export-brand">弓箭性能 · 分析计算工具</span>
               <span className="export-meta">
                 {unitSystem === 'metric' ? '公制 cm / kg' : '英制 in / Lb'}
                 {' · '}
@@ -844,6 +934,7 @@ export default function App() {
           </section>
         </aside>
       </main>
+      )}
     </div>
   )
 }
