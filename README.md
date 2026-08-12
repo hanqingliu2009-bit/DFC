@@ -4,6 +4,8 @@
 
 仓库：https://github.com/hanqingliu2009-bit/DFC
 
+版本更新见 [CHANGELOG.md](./CHANGELOG.md)。当前版本 **1.1.1**。
+
 ## 功能概览
 
 ### 交互模式
