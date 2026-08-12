@@ -2,7 +2,7 @@
   "name": "dfc",
   "productName": "弓箭性能分析计算工具",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "弓箭性能分析与计算工具",
   "author": "DFC",
   "type": "module",

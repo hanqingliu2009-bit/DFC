@@ -854,6 +854,33 @@ table input:focus {
   border-color: var(--focus);
 }
 
+.curve-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.65rem;
+}
+
+.curve-name-field span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.curve-name-field input {
+  width: 100%;
+  border: 1px solid var(--stroke);
+  background: var(--chart-bg);
+  padding: 0.4rem 0.5rem;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 0.9rem;
+}
+
+.curve-name-field input:focus {
+  outline: 2px solid color-mix(in srgb, var(--focus) 55%, transparent);
+  outline-offset: 1px;
+  border-color: var(--focus);
+}
+
 .add-row {
   display: grid;
   grid-template-columns: 1fr 1fr auto;

@@ -271,6 +271,13 @@ export default function App() {
     setProbe(null)
   }
 
+  function renameActiveSeries(name: string) {
+    if (!activeId) return
+    setSeries((prev) =>
+      prev.map((s) => (s.id === activeId ? { ...s, name } : s)),
+    )
+  }
+
   function addPoint() {
     if (!activeId) return
     const xDisplay = Number(draftX)
@@ -313,9 +320,9 @@ export default function App() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    const safe = active.name.replace(/[\\/:*?"<>|]+/g, '_')
-    a.download =
-      unitSystem === 'imperial' ? `${safe}-imperial.csv` : `${safe}-metric.csv`
+    const baseName = active.name.trim() || '未命名曲线'
+    const safe = baseName.replace(/[\\/:*?"<>|]+/g, '_')
+    a.download = `${safe}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -851,7 +858,18 @@ export default function App() {
           </section>
 
           <section className="table-section" aria-label="测点数据">
-            <h2>测点{active ? ` · ${active.name}` : ''}</h2>
+            <h2>测点{active ? ` · ${active.name.trim() || '未命名曲线'}` : ''}</h2>
+            {active && (
+              <label className="curve-name-field">
+                <span>曲线名称</span>
+                <input
+                  type="text"
+                  value={active.name}
+                  placeholder="未命名曲线"
+                  onChange={(e) => renameActiveSeries(e.target.value)}
+                />
+              </label>
+            )}
             <div className="add-row">
               <input
                 type="number"
