@@ -18,6 +18,9 @@ release
 *.exe
 *.zip
 
+# Local sample curves (keep on disk, do not publish)
+sample-data/
+
 # Editor
 .vscode/*
 !.vscode/extensions.json
