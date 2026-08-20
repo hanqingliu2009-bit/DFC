@@ -99,3 +99,61 @@ export function displayDrawToCm(
 ): number {
   return unitSystem === 'imperial' ? value * CM_PER_INCH : value
 }
+
+/** kg → grain */
+export function kgToGrain(kg: number): number {
+  return kg / KG_PER_GRAIN
+}
+
+/** kg → g */
+export function kgToGram(kg: number): number {
+  return kg * 1000
+}
+
+/**
+ * 两支不同质量箭的虚拟质量（kg）。
+ * 假定同拉距下两次可用蓄能相等：½(m₁+mᵥ)v₁² = ½(m₂+mᵥ)v₂²
+ */
+export function virtualMassTwoArrowKg(
+  mass1: number,
+  massUnit1: MassUnit,
+  speed1: number,
+  speedUnit1: SpeedUnit,
+  mass2: number,
+  massUnit2: MassUnit,
+  speed2: number,
+  speedUnit2: SpeedUnit,
+): number | null {
+  const m1 = massToKg(mass1, massUnit1)
+  const m2 = massToKg(mass2, massUnit2)
+  const v1 = speedToMps(speed1, speedUnit1)
+  const v2 = speedToMps(speed2, speedUnit2)
+  if (
+    !Number.isFinite(m1) ||
+    !Number.isFinite(m2) ||
+    !Number.isFinite(v1) ||
+    !Number.isFinite(v2) ||
+    m1 <= 0 ||
+    m2 <= 0 ||
+    v1 <= 0 ||
+    v2 <= 0
+  ) {
+    return null
+  }
+  const v1sq = v1 * v1
+  const v2sq = v2 * v2
+  const denom = v1sq - v2sq
+  if (Math.abs(denom) < 1e-6) return null
+  const mv = (m2 * v2sq - m1 * v1sq) / denom
+  if (!Number.isFinite(mv) || mv <= 0) return null
+  return mv
+}
+
+export type VirtualMassDisplay = {
+  grain: number
+  gram: number
+}
+
+export function virtualMassDisplay(kg: number): VirtualMassDisplay {
+  return { grain: kgToGrain(kg), gram: kgToGram(kg) }
+}

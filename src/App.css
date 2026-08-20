@@ -206,6 +206,31 @@
   font-size: 0.85rem;
 }
 
+.arrow-vm-panel {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--stroke);
+  background: var(--panel);
+}
+
+.arrow-vm-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.55rem;
+}
+
+.arrow-vm-result .stat-value.sm {
+  font-size: 1.35rem;
+}
+
+.arrow-vm-note {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .arrow-list {
   display: flex;
   flex-direction: column;

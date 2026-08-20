@@ -4,7 +4,9 @@
 
 仓库：https://github.com/hanqingliu2009-bit/DFC
 
-版本更新见 [CHANGELOG.md](./CHANGELOG.md)。当前版本 **1.2.2**（与 `package.json` 的 `version` 一致，界面标题旁也会显示）。
+版本更新见 [CHANGELOG.md](./CHANGELOG.md)。当前版本 **1.3.1**（与 `package.json` 的 `version` 一致，界面标题旁也会显示）。
+
+给终端用户的图文说明见：[docs/用户使用说明书.html](./docs/用户使用说明书.html)（双击用浏览器打开）。
 
 ## 功能概览
 

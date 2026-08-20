@@ -5,8 +5,11 @@ import {
   joulesPerForceDisplay,
   kineticEnergyJoules,
   linkArrowKeToBow,
+  massToKg,
   perForceKeLabel,
   perForceKeUnit,
+  virtualMassDisplay,
+  virtualMassTwoArrowKg,
   type MassUnit,
   type SpeedUnit,
 } from '../lib/arrowEnergy'
@@ -97,13 +100,64 @@ export function ArrowEnergyPanel({
     return ke != null
   })
 
+  const virtualMass = useMemo(() => {
+    type Shot = {
+      index: number
+      label: string
+      mass: number
+      massUnit: MassUnit
+      speed: number
+      speedUnit: SpeedUnit
+    }
+    const shots: Shot[] = []
+    for (let i = 0; i < rows.length && shots.length < 2; i++) {
+      const row = rows[i]
+      const massN = Number(row.mass)
+      const speedN = Number(row.speed)
+      const ke = kineticEnergyJoules(massN, row.massUnit, speedN, row.speedUnit)
+      if (ke == null) continue
+      shots.push({
+        index: i + 1,
+        label: row.name.trim() || `箭 #${i + 1}`,
+        mass: massN,
+        massUnit: row.massUnit,
+        speed: speedN,
+        speedUnit: row.speedUnit,
+      })
+    }
+    if (shots.length < 2) return null
+
+    const [a, b] = shots
+    const m1 = massToKg(a.mass, a.massUnit)
+    const m2 = massToKg(b.mass, b.massUnit)
+    if (!(m1 > 0) || !(m2 > 0) || Math.abs(m1 - m2) / Math.max(m1, m2) < 1e-4) {
+      return { a, b, value: null as ReturnType<typeof virtualMassDisplay> | null }
+    }
+
+    const kg = virtualMassTwoArrowKg(
+      a.mass,
+      a.massUnit,
+      a.speed,
+      a.speedUnit,
+      b.mass,
+      b.massUnit,
+      b.speed,
+      b.speedUnit,
+    )
+    return {
+      a,
+      b,
+      value: kg != null ? virtualMassDisplay(kg) : null,
+    }
+  }, [rows])
+
   return (
     <section className="arrow-panel" aria-label="箭动能计算">
       <div className="arrow-panel-head">
         <div>
           <h2>箭动能</h2>
           <p className="arrow-lede">
-            输入箭重与箭速计算动能（J）。可选测速拉距；拉力曲线可选「无」并手填测速拉力算每磅/每千克动能。关联曲线时可自动取拉力与蓄能、效率。
+            输入箭重与箭速计算动能（J）。填两支不同重量箭的测速后可得到 virtual mass。可选测速拉距；拉力曲线可选「无」并手填测速拉力。关联曲线时可自动取拉力与蓄能、效率。
           </p>
         </div>
         <div className="arrow-panel-actions">
@@ -135,6 +189,24 @@ export function ArrowEnergyPanel({
         <p className="arrow-warn">
           当前没有可用拉力曲线。仍可算动能；测速拉力可手填以计算每磅/每千克动能。效率需关联曲线。
         </p>
+      )}
+
+      {virtualMass?.value && (
+        <aside className="arrow-vm-panel" aria-label="Virtual mass">
+          <div className="arrow-vm-result">
+            <span className="stat-label">Virtual mass</span>
+            <span className="stat-value sm">
+              {formatNumber(virtualMass.value.gram, 2)}
+            </span>
+            <span className="stat-unit">
+              g（{formatNumber(virtualMass.value.grain, 1)} 格令）
+            </span>
+          </div>
+          <p className="arrow-vm-note">
+            由 #{virtualMass.a.index} {virtualMass.a.label} 与 #{virtualMass.b.index}{' '}
+            {virtualMass.b.label} 的箭重、箭速算出（同拉距测速）。
+          </p>
+        </aside>
       )}
 
       <div className="arrow-list">
