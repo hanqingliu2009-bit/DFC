@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-08-20
+
+### 新增
+- **Virtual mass（虚拟质量）**：在箭动能页填入两支不同重量箭的箭重与箭速后自动计算；主单位 **g**，括号内为格令
+- 图文 **用户使用说明书**（`docs/用户使用说明书.html`）：从绿色版解压启动讲起，含拉力曲线与箭动能实机截图
+
+### 改进
+- 箭动能页说明补充 Virtual mass 用法提示
+
 ## [1.2.2] — 2026-08-12
 
 ### 新增
@@ -57,6 +66,7 @@
 
 ---
 
+[1.3.1]: https://github.com/hanqingliu2009-bit/DFC/releases/tag/v1.3.1
 [1.2.2]: https://github.com/hanqingliu2009-bit/DFC/releases/tag/v1.2.2
 [1.1.1]: https://github.com/hanqingliu2009-bit/DFC/releases/tag/v1.1.1
 [1.0.0]: https://github.com/hanqingliu2009-bit/DFC
